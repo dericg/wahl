@@ -110,6 +110,11 @@ jobs:
             Thought:
             ${{ inputs.thought }}
 
+      - name: Restore runner ownership
+        run: |
+          sudo chown -R runner:runner "$GITHUB_WORKSPACE"
+          sudo chmod -R u+rwX "$GITHUB_WORKSPACE"
+
       - name: Validate Wahl
         run: npm run build
 
