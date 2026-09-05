@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { validateFixRequest } from "../_shared/wahl-fix-policy.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,16 +31,16 @@ Deno.serve(async (request) => {
   const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user) return json({ error: "Authentication required" }, 401);
 
-  const { data: owner } = await admin.from("site_owners").select("user_id").eq("user_id", user.id).maybeSingle();
-  if (!owner) return json({ error: "Owner access required" }, 403);
+  const { data: owner, error: ownerError } = await userClient.rpc("is_wahl_owner");
+  if (ownerError) return json({ error: "Owner verification failed" }, 500);
 
   const { postId } = await request.json();
   if (typeof postId !== "string") return json({ error: "A post ID is required" }, 400);
 
-  const { data: post } = await admin.from("posts").select("id,author_id,text,audience_type").eq("id", postId).maybeSingle();
-  if (!post || post.author_id !== user.id || post.audience_type !== "private" || !/#fix\b/i.test(post.text)) {
-    return json({ error: "This post is not an eligible private fix request" }, 400);
-  }
+  const { data: post, error: postError } = await userClient.from("posts").select("id,author_id,text,audience_type").eq("id", postId).maybeSingle();
+  if (postError) return json({ error: "The fix request could not be read" }, 500);
+  const policyError = validateFixRequest({ owner: Boolean(owner), userId: user.id, post });
+  if (policyError) return json({ error: policyError.error }, policyError.status);
 
   const { data: existing } = await admin.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at").eq("post_id", post.id).maybeSingle();
   if (existing) {

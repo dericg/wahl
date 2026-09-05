@@ -18,10 +18,11 @@ Wahl is Deric Garza's intentionally small personal wall: a quiet place for short
 npm install
 npm run dev
 npm run build
+npm test
 npm run preview
 ```
 
-There is currently no separate lint or test script. At minimum, run `npm run build` after source changes.
+Run `npm test` for automation-policy changes and `npm run build` after source changes.
 
 ## Project map
 
@@ -77,8 +78,9 @@ There is currently no separate lint or test script. At minimum, run `npm run bui
 Before handing off a code change:
 
 1. Run `npm run build`.
-2. Check the affected experience locally when interaction or layout changed.
-3. Confirm that no secrets or `.env.local` were added to Git.
-4. If publishing was requested, deploy the built `dist` output through the existing OpenAI Sites project and verify the live URL.
+2. Run `npm test` when automation-policy logic changed.
+3. Check the affected experience locally when interaction or layout changed.
+4. Confirm that no secrets or `.env.local` were added to Git.
+5. If publishing was requested, deploy the built `dist` output through the existing OpenAI Sites project and verify the live URL.
 
 Do not deploy merely because source files changed; deploy when the user asks to publish or when deployment is explicitly part of the task.
