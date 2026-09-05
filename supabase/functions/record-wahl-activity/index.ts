@@ -41,6 +41,9 @@ Deno.serve(async (request) => {
     url: payload.url,
     occurred_at: new Date(payload.occurredAt).toISOString(),
   }).select("source_id,kind,summary,url,occurred_at").single();
-  if (error) return json({ error: "Repository activity could not be recorded" }, 500);
+  if (error) {
+    console.error("Repository activity insert failed", error);
+    return json({ error: "Repository activity could not be recorded", code: error.code || "unknown" }, 500);
+  }
   return json({ activity: data });
 });
