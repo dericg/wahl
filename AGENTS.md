@@ -85,6 +85,9 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Test authorization and policy decisions as isolated logic before changing the deployed Supabase function or database policy.
 - Exercise the complete path in order: authenticated owner request, private eligible post, database queue record, GitHub dispatch, issue creation, finite Codex run, tests/build, review branch, and pull request.
 - Create the GitHub issue in a trusted workflow step before Codex runs. The pull request must reference it with `Closes #<issue>` so merging records the resolution and closes the issue.
+- If Codex reports that the OpenAI API has no remaining credits, treat it as an account-billing failure rather than a code or workflow failure. Do not retry repeatedly, alter the implementation, or close the issue.
+- API credits are separate from a ChatGPT subscription. After the repository owner restores API billing, rerun the workflow with the existing `issue_number` so the original issue is reused and no duplicate issue is created.
+- Never attempt to purchase credits, change OpenAI billing, rotate `OPENAI_API_KEY`, or expose secret values from automation. Those are owner-controlled recovery steps.
 - A successful pull request ends the automation. Human review is required before merge, and publishing is a separate explicit action.
 
 ## Validation and deployment
