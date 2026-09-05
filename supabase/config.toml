@@ -1,0 +1,4 @@
+project_id = "rzmgyvkvfjbcsxegafko"
+
+[functions.dispatch-wahl-fix]
+verify_jwt = true

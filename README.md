@@ -22,6 +22,6 @@ Without Supabase environment variables, the development server runs as an intera
 
 ## `#fix` automation
 
-The owner can publish a private thought containing `#fix`, then choose **Send to Codex** on that post. Wahl opens a prefilled issue in the private GitHub repository. Submitting that issue starts `.github/workflows/wahl-fix.yml`, which asks Codex to implement the request on a dedicated branch, validates the production build, and opens a pull request for review.
+The owner can publish a private thought containing `#fix`, then choose **Send to Codex** on that post. An authenticated Supabase Edge Function verifies the owner and starts `.github/workflows/wahl-fix.yml` directly. Codex implements the request on a dedicated branch, validates the production build, and opens a pull request for review.
 
-The workflow requires an Actions secret named `OPENAI_API_KEY`. It accepts only issues opened by the repository owner with the `wahl-fix` label. It never merges or deploys automatically.
+The workflow requires an Actions secret named `OPENAI_API_KEY`. The Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. It never merges or deploys automatically.

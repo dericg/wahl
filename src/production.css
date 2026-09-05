@@ -28,6 +28,6 @@
 .release-list p { margin: 0; color: var(--muted); font: 9px/1.4 "DM Sans", sans-serif; }
 .fix-request { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(81,57,35,.75); }
 .fix-request span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-.fix-request a { display: inline-flex; align-items: center; border: 1px solid #80652f; border-radius: 99px; padding: 5px 9px; color: #e4bf68; background: var(--brass-soft); font-size: 10px; font-weight: 600; text-decoration: none; }
-.fix-request a:hover { border-color: var(--brass); color: var(--ink); }
+.fix-request a, .fix-request button { display: inline-flex; align-items: center; border: 1px solid #80652f; border-radius: 99px; padding: 5px 9px; color: #e4bf68; background: var(--brass-soft); font-size: 10px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.fix-request a:hover, .fix-request button:hover { border-color: var(--brass); color: var(--ink); }
 @media(max-width:520px){.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}

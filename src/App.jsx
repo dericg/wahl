@@ -57,11 +57,9 @@ function Composer({ onPost, busy }) {
   async function submit() {
     const text = draft.trim();
     if (!text || busy) return;
-    if (/#fix\b/i.test(text) && audience !== "private") {
-      setAudience("private");
-      return;
-    }
-    const saved = await onPost({ text, audience });
+    const effectiveAudience = /#fix\b/i.test(text) ? "private" : audience;
+    if (effectiveAudience !== audience) setAudience(effectiveAudience);
+    const saved = await onPost({ text, audience: effectiveAudience });
     if (saved) setDraft("");
   }
 
@@ -73,28 +71,16 @@ function Composer({ onPost, busy }) {
         <button className={`audience-pill ${audience === "private" ? "selected" : ""}`} onClick={() => setAudience("private")} type="button" aria-pressed={audience === "private"}><Lock size={13} />Only me</button>
         <button className={`audience-pill ${audience === "everyone" ? "selected" : ""}`} onClick={() => setAudience("everyone")} type="button" aria-pressed={audience === "everyone"}><Globe2 size={13} />Everyone</button>
       </div>
-      <div className="composer-footer"><span>{/#fix\b/i.test(draft) && audience !== "private" ? "#fix requests must be private — press Post to switch" : draft.length ? `${draft.length} / 320` : audience === "private" ? "a private draft, visible only to you" : "published to your public wall"}</span><button className="post-button" type="button" disabled={!draft.trim() || busy} onClick={submit}>{busy ? "Posting…" : "Post"}</button></div>
+      <div className="composer-footer"><span>{/#fix\b/i.test(draft) ? "#fix requests are always private" : draft.length ? `${draft.length} / 320` : audience === "private" ? "a private draft, visible only to you" : "published to your public wall"}</span><button className="post-button" type="button" disabled={!draft.trim() || busy} onClick={submit}>{busy ? "Posting…" : "Post"}</button></div>
     </section>
   );
 }
 
-function PostCard({ post, owner, onDelete }) {
+function PostCard({ post, owner, onDelete, onSendFix, fix }) {
   const privatePost = post.audience_type === "private";
   const fixRequest = owner && privatePost && /#fix\b/i.test(post.text);
   const Icon = privatePost ? Lock : Globe2;
-  const fixTitle = post.text.replace(/#fix\b/gi, "").trim().slice(0, 72) || "Improve Wahl";
-  const fixBody = [
-    "## Thought from Wahl",
-    "",
-    post.text,
-    "",
-    `Wahl post ID: \`${post.id}\``,
-    "",
-    "## Requested outcome",
-    "",
-    "Interpret this thought as a focused improvement to Wahl. Preserve the site's minimal character and follow AGENTS.md. Create a reviewable change; do not merge or deploy it.",
-  ].join("\n");
-  const fixUrl = `https://github.com/dericg/wahl/issues/new?labels=wahl-fix&title=${encodeURIComponent(`[Wahl fix] ${fixTitle}`)}&body=${encodeURIComponent(fixBody)}`;
+  const fixStatus = fix?.status === "pr_ready" ? "Pull request ready" : fix?.status === "working" ? "Codex is working" : fix?.status === "failed" ? "Needs attention" : fix ? "Sent to Codex" : "Site improvement";
   return (
     <article className="post-card">
       <header className="post-header">
@@ -102,7 +88,7 @@ function PostCard({ post, owner, onDelete }) {
         <div className="post-tools"><span className="audience-badge"><Icon size={12} />{privatePost ? "Only me" : "Everyone"}</span>{owner && <button className="delete-post" type="button" onClick={() => onDelete(post.id)} aria-label="Delete this post"><Trash2 size={13} /></button>}</div>
       </header>
       <p>{post.text}</p>
-      {fixRequest && <div className="fix-request"><span>Site improvement</span><a href={fixUrl} target="_blank" rel="noreferrer">Send to Codex</a></div>}
+      {fixRequest && <div className="fix-request"><span>{fixStatus}</span>{fix?.pull_request_url ? <a href={fix.pull_request_url} target="_blank" rel="noreferrer">Review pull request</a> : fix ? <a href="https://github.com/dericg/wahl/actions/workflows/wahl-fix.yml" target="_blank" rel="noreferrer">View progress</a> : <button type="button" onClick={() => onSendFix(post.id)}>Send to Codex</button>}</div>}
     </article>
   );
 }
@@ -147,15 +133,18 @@ export default function App() {
   const [loading, setLoading] = useState(isCloudConfigured);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [fixes, setFixes] = useState({});
 
   async function loadWall() {
     if (!supabase) return;
     setLoading(true);
-    const [{ data, error }, { data: isOwner }] = await Promise.all([
+    const [{ data, error }, { data: isOwner }, { data: fixData }] = await Promise.all([
       supabase.from("posts").select("id,text,audience_type,created_at").order("created_at", { ascending: false }),
       supabase.rpc("is_wahl_owner"),
+      supabase.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at"),
     ]);
     setOwner(Boolean(isOwner));
+    setFixes(Object.fromEntries((fixData || []).map((fix) => [fix.post_id, fix])));
     if (error) setNotice("The wall couldn’t be loaded. Please try again shortly.");
     else { setPosts(data || []); setNotice(""); }
     setLoading(false);
@@ -189,13 +178,33 @@ export default function App() {
     if (error) setNotice(error.message); else setPosts((current) => current.filter((post) => post.id !== id));
   }
 
+  async function sendFix(postId) {
+    if (previewMode) {
+      setFixes((current) => ({ ...current, [postId]: { post_id: postId, status: "queued" } }));
+      return;
+    }
+    setFixes((current) => ({ ...current, [postId]: { post_id: postId, status: "queued" } }));
+    const { data, error } = await supabase.functions.invoke("dispatch-wahl-fix", { body: { postId } });
+    if (error) {
+      setFixes((current) => {
+        const next = { ...current };
+        delete next[postId];
+        return next;
+      });
+      setNotice("The fix couldn’t be sent. Please try again shortly.");
+      return;
+    }
+    setFixes((current) => ({ ...current, [postId]: data.request }));
+    setNotice("");
+  }
+
   return (
     <main><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
       <header className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></header>
       <PersonalNote />
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
-      <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts`}</span></div>{!loading && posts.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{posts.map((post) => <PostCard key={post.id} post={post} owner={owner} onDelete={deletePost} />)}</section>
+      <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts`}</span></div>{!loading && posts.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{posts.map((post) => <PostCard key={post.id} post={post} owner={owner} onDelete={deletePost} onSendFix={sendFix} fix={fixes[post.id]} />)}</section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></footer>
     </div></main>
   );
