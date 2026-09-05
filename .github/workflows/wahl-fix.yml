@@ -15,6 +15,10 @@ on:
         description: Owner-authored fix request
         required: true
         type: string
+      issue_number:
+        description: Existing issue number when retrying a documented request
+        required: false
+        type: string
 
 concurrency:
   group: wahl-fix-${{ inputs.request_id }}
@@ -48,10 +52,17 @@ jobs:
         id: issue
         env:
           GH_TOKEN: ${{ github.token }}
+          EXISTING_ISSUE_NUMBER: ${{ inputs.issue_number }}
           REQUEST_ID: ${{ inputs.request_id }}
           POST_ID: ${{ inputs.post_id }}
           THOUGHT: ${{ inputs.thought }}
         run: |
+          if test -n "$EXISTING_ISSUE_NUMBER"; then
+            echo "number=$EXISTING_ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "url=https://github.com/${{ github.repository }}/issues/$EXISTING_ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           title="$(printf '%s' "$THOUGHT" | sed -E 's/#[Ff][Ii][Xx]//g' | tr '\n' ' ' | cut -c1-72)"
           printf '%s\n\n%s\n\n%s\n\n%s\n' \
             "## Thought from Wahl" \
@@ -66,12 +77,23 @@ jobs:
           echo "url=$issue_url" >> "$GITHUB_OUTPUT"
           echo "number=$issue_number" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare restricted Codex user
+        run: |
+          sudo adduser --system --home /home/codex --shell /bin/bash --group codex
+          sudo usermod -a -G codex runner
+          sudo usermod -a -G runner codex
+          sudo chown -R runner:codex "$GITHUB_WORKSPACE"
+          sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
+          sudo find "$GITHUB_WORKSPACE" -type d -exec chmod g+s {} +
+
       - name: Ask Codex to implement the fix
         id: codex
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           permission-profile: ":workspace"
+          safety-strategy: unprivileged-user
+          codex-user: codex
           effort: medium
           codex-args: '["--ephemeral"]'
           prompt: |
@@ -87,6 +109,11 @@ jobs:
 
             Thought:
             ${{ inputs.thought }}
+
+      - name: Restore runner ownership
+        run: |
+          sudo chown -R runner:runner "$GITHUB_WORKSPACE"
+          sudo chmod -R u+rwX "$GITHUB_WORKSPACE"
 
       - name: Validate Wahl
         run: npm run build
