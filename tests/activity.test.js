@@ -12,8 +12,11 @@ test("release commits become Wahl repository links", () => {
 });
 
 test("activity merges by source and remains newest first", () => {
-  const remote = [{ source_id: "issue:6", kind: "Issue", summary: "Issue", url: "https://github.com/dericg/wahl/issues/6", occurred_at: "2026-09-06T00:00:00Z" }];
-  assert.deepEqual(mergeActivity(remote, [{ hash: "abcdef1", date: occurredAt, message: "Commit" }]).map((entry) => entry.source_id), ["issue:6", "commit:abcdef1"]);
+  const remote = [
+    { source_id: "issue:6:live", kind: "Issue", summary: "Issue", url: "https://github.com/dericg/wahl/issues/6", occurred_at: "2026-09-06T00:00:00Z" },
+    { source_id: "issue:6:snapshot", kind: "Issue", summary: "Issue", url: "https://github.com/dericg/wahl/issues/6", occurred_at: "2026-09-06T00:00:00Z" },
+  ];
+  assert.deepEqual(mergeActivity(remote, [{ hash: "abcdef1", date: occurredAt, message: "Commit" }]).map((entry) => entry.source_id), ["issue:6:snapshot", "commit:abcdef1"]);
 });
 
 test("thoughts and GitHub events form one chronological wall feed", () => {
@@ -28,8 +31,10 @@ test("issues filter returns only GitHub issue events", () => {
   const entries = [
     { id: "thought", entry_type: "thought" },
     { id: "github:issue:6", entry_type: "activity", kind: "Issue" },
+    { id: "github:issue:6:older", entry_type: "activity", kind: "Issue" },
     { id: "github:pr:15", entry_type: "activity", kind: "Pull request" },
   ];
+  entries[1].url = entries[2].url = "https://github.com/dericg/wahl/issues/6";
   assert.deepEqual(filterWallEntries(entries, "issues"), [entries[1]]);
   assert.equal(filterWallEntries(entries, "all"), entries);
 });

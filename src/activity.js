@@ -23,10 +23,9 @@ export function releaseActivity(commits = []) {
 
 export function mergeActivity(remote = [], fallbackCommits = []) {
   const entries = [...remote, ...releaseActivity(fallbackCommits)];
-  return [...new Map(entries.map((entry) => [entry.source_id, entry])).values()]
+  return [...new Map(entries.map((entry) => [`${entry.kind}\u0000${entry.summary}\u0000${entry.url}\u0000${entry.occurred_at}`, entry])).values()]
     .filter((entry) => validDate(entry.occurred_at))
-    .sort((left, right) => Date.parse(right.occurred_at) - Date.parse(left.occurred_at))
-    .slice(0, 24);
+    .sort((left, right) => Date.parse(right.occurred_at) - Date.parse(left.occurred_at));
 }
 
 export function wallEntries(posts = [], activity = []) {
@@ -37,7 +36,12 @@ export function wallEntries(posts = [], activity = []) {
 }
 
 export function filterWallEntries(entries, filter) {
-  if (filter === "issues") return entries.filter((entry) => entry.entry_type === "activity" && entry.kind === "Issue");
+  if (filter === "issues") {
+    const issues = entries.filter((entry) => entry.entry_type === "activity" && entry.kind === "Issue");
+    const byIssue = new Map();
+    for (const entry of issues) if (!byIssue.has(entry.url)) byIssue.set(entry.url, entry);
+    return [...byIssue.values()];
+  }
   return entries;
 }
 
@@ -82,7 +86,7 @@ export function activityPayloads(eventName, payload) {
 
 export function snapshotActivity({ commits = [], issues = [], pulls = [], deployments = [], runs = [] } = {}) {
   const commitEntries = commits.map((commit) => ({ sourceId: `commit:${commit.sha}`, kind: "Commit", summary: bounded(String(commit.commit?.message || "Repository update").split("\n")[0]), url: commit.html_url, occurredAt: commit.commit?.committer?.date }));
-  const issueEntries = issues.filter((issue) => !issue.pull_request).map((issue) => ({ sourceId: `issue:${issue.number}:snapshot:${issue.updated_at}`, kind: "Issue", summary: bounded(`${issue.state} #${issue.number} · ${issue.title}`), url: issue.html_url, occurredAt: issue.updated_at }));
+  const issueEntries = issues.filter((issue) => !issue.pull_request).map((issue) => ({ sourceId: `issue:${issue.number}:${issue.state === "closed" ? "closed" : "opened"}:${issue.updated_at}`, kind: "Issue", summary: bounded(`${issue.state} #${issue.number} · ${issue.title}`), url: issue.html_url, occurredAt: issue.updated_at }));
   const pullEntries = pulls.map((pull) => ({ sourceId: `pr:${pull.number}:snapshot:${pull.updated_at}`, kind: "Pull request", summary: bounded(`${pull.merged_at ? "merged" : pull.state} #${pull.number} · ${pull.title}`), url: pull.html_url, occurredAt: pull.merged_at || pull.updated_at }));
   const deploymentEntries = deployments.map((deployment) => ({ sourceId: `deployment:${deployment.id}:snapshot`, kind: "Deployment", summary: `${deployment.environment || "Production"} · requested`, url: `${repositoryUrl}/deployments`, occurredAt: deployment.created_at }));
   const workflowEntries = runs.map((run) => ({ sourceId: `workflow:${run.id}:${run.run_attempt || 1}`, kind: "Workflow", summary: `${run.name} · ${run.conclusion || run.status}`, url: run.html_url, occurredAt: run.updated_at }));

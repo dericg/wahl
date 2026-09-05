@@ -200,7 +200,6 @@ export default function App() {
     supabase.from("repository_activity")
       .select("source_id,kind,summary,url,occurred_at")
       .order("occurred_at", { ascending: false })
-      .limit(24)
       .then(({ data, error }) => {
         if (!active) return;
         setActivity(mergeActivity(data || [], __WAHL_RELEASE__.commits));
