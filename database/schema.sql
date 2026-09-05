@@ -11,6 +11,8 @@ create table if not exists public.site_owners (
 create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references auth.users(id) on delete cascade,
+  -- Plain text with optional **bold** / *italic* markers; the limit includes
+  -- formatting. The client renders text safely, never stored HTML.
   text text not null check (char_length(text) between 1 and 320),
   audience_type text not null check (audience_type in ('private', 'everyone')),
   created_at timestamptz not null default now()

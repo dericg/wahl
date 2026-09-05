@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ChevronDown, Globe2, Lock, LogIn, LogOut, Trash2 } from "lucide-react";
 import { INITIAL_POSTS } from "./data";
 import { isCloudConfigured, supabase } from "./supabase";
+import ThoughtEditor from "./ThoughtEditor";
+import { draftDetails, FormattedText } from "./formattedText";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -51,27 +53,28 @@ function ReleaseHistory() {
 }
 
 function Composer({ onPost, busy }) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(() => draftDetails([]));
+  const [editorVersion, setEditorVersion] = useState(0);
   const [audience, setAudience] = useState("everyone");
 
   async function submit() {
-    const text = draft.trim();
-    if (!text || busy) return;
-    const effectiveAudience = /#fix\b/i.test(text) ? "private" : audience;
+    const { text } = draft;
+    if (!draft.valid || busy) return;
+    const effectiveAudience = draft.hasFix ? "private" : audience;
     if (effectiveAudience !== audience) setAudience(effectiveAudience);
     const saved = await onPost({ text, audience: effectiveAudience });
-    if (saved) setDraft("");
+    if (saved) { setDraft(draftDetails([])); setEditorVersion((value) => value + 1); }
   }
 
   return (
     <section className="composer" aria-label="Create a post">
-      <label htmlFor="thought">what’s the thought?</label>
-      <textarea id="thought" value={draft} maxLength={320} rows={3} onChange={(event) => setDraft(event.target.value)} placeholder="Type it before it disappears…" />
+      <label id="thought-label">what’s the thought?</label>
+      <ThoughtEditor key={editorVersion} onChange={setDraft} busy={busy} invalid={draft.length > 320} />
       <div className="audience-row" aria-label="Choose who can see this">
         <button className={`audience-pill ${audience === "private" ? "selected" : ""}`} onClick={() => setAudience("private")} type="button" aria-pressed={audience === "private"}><Lock size={13} />Only me</button>
         <button className={`audience-pill ${audience === "everyone" ? "selected" : ""}`} onClick={() => setAudience("everyone")} type="button" aria-pressed={audience === "everyone"}><Globe2 size={13} />Everyone</button>
       </div>
-      <div className="composer-footer"><span>{/#fix\b/i.test(draft) ? "#fix requests are always private" : draft.length ? `${draft.length} / 320` : audience === "private" ? "a private draft, visible only to you" : "published to your public wall"}</span><button className="post-button" type="button" disabled={!draft.trim() || busy} onClick={submit}>{busy ? "Posting…" : "Post"}</button></div>
+      <div className="composer-footer"><span id="thought-status" aria-live="polite">{draft.length > 320 ? `${draft.length} / 320 — shorten your thought to post` : draft.hasFix ? "#fix requests are always private" : draft.length ? `${draft.length} / 320 · includes formatting` : audience === "private" ? "a private draft, visible only to you" : "published to your public wall"}</span><button className="post-button" type="button" disabled={!draft.valid || busy} onClick={submit}>{busy ? "Posting…" : "Post"}</button></div>
     </section>
   );
 }
@@ -87,7 +90,7 @@ function PostCard({ post, owner, onDelete, onSendFix, fix }) {
         <div><strong className="mine">Deric</strong><time dateTime={new Date(post.created_at).toISOString()}>{timeAgo(post.created_at)}</time></div>
         <div className="post-tools"><span className="audience-badge"><Icon size={12} />{privatePost ? "Only me" : "Everyone"}</span>{owner && <button className="delete-post" type="button" onClick={() => onDelete(post.id)} aria-label="Delete this post"><Trash2 size={13} /></button>}</div>
       </header>
-      <p>{post.text}</p>
+      <p><FormattedText text={post.text} /></p>
       {fixRequest && <div className="fix-request"><span>{fixStatus}</span>{fix?.pull_request_url ? <a href={fix.pull_request_url} target="_blank" rel="noreferrer">Review pull request</a> : fix ? <a href="https://github.com/dericg/wahl/actions/workflows/wahl-fix.yml" target="_blank" rel="noreferrer">View progress</a> : <button type="button" onClick={() => onSendFix(post.id)}>Send to Codex</button>}</div>}
     </article>
   );
