@@ -61,6 +61,7 @@ grant select on public.automation_requests to authenticated;
 grant insert on public.automation_requests to authenticated;
 revoke all on public.repository_activity from anon, authenticated;
 grant select on public.repository_activity to anon, authenticated;
+grant select, insert, update on public.repository_activity to service_role;
 
 drop policy if exists "Repository activity is publicly readable" on public.repository_activity;
 create policy "Repository activity is publicly readable" on public.repository_activity for select to anon, authenticated

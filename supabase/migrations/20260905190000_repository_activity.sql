@@ -11,5 +11,6 @@ create index if not exists idx_repository_activity_occurred_at on public.reposit
 alter table public.repository_activity enable row level security;
 revoke all on public.repository_activity from anon, authenticated;
 grant select on public.repository_activity to anon, authenticated;
+grant select, insert, update on public.repository_activity to service_role;
 drop policy if exists "Repository activity is publicly readable" on public.repository_activity;
 create policy "Repository activity is publicly readable" on public.repository_activity for select to anon, authenticated using (true);
