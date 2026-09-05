@@ -13,6 +13,12 @@ The launch MVP is a single-page personal website backed by Supabase Postgres. Pu
 
 Without Supabase environment variables, the development server runs as an interactive local preview. Production builds without those variables are read-only.
 
+## Repository activity
+
+Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.
+
+GitHub Actions sends normalized event summaries to the authenticated `record-wahl-activity` Edge Function. The function validates the shared callback token and Wahl-only GitHub URLs before writing to `repository_activity`. Public visitors may read these events, but browser clients cannot insert or modify them. Run the activity workflow manually once after rollout to seed recent history; later events arrive automatically.
+
 ## Production setup
 
 1. Create a Supabase project and run `database/schema.sql` in its SQL editor.
@@ -43,6 +49,6 @@ The workflow requires these GitHub Actions secrets:
 - `WAHL_SUPABASE_URL` for the deployed Supabase project URL
 - `WAHL_STATUS_CALLBACK_TOKEN` for authenticated workflow status updates
 
-The `dispatch-wahl-fix` Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. The `update-wahl-fix` Edge Function requires the same `WAHL_STATUS_CALLBACK_TOKEN` value stored as a Supabase secret. Use a long random value and never expose it to the browser or commit it.
+The `dispatch-wahl-fix` Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. The `update-wahl-fix` and `record-wahl-activity` Edge Functions require the same `WAHL_STATUS_CALLBACK_TOKEN` value stored as a Supabase secret. Use a long random value and never expose it to the browser or commit it.
 
 Before enabling callbacks, apply the database migration that adds `no_change`, deploy both Edge Functions, and configure the matching GitHub and Supabase secrets. The automation never merges or deploys automatically.

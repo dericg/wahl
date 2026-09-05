@@ -1,0 +1,61 @@
+name: Record Wahl repository activity
+
+on:
+  push:
+    branches: [main]
+  issues:
+    types: [opened, closed, reopened]
+  pull_request:
+    types: [opened, closed, reopened]
+  deployment_status:
+  workflow_run:
+    workflows: ["Validate Wahl", "Turn a Wahl thought into a pull request"]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: wahl-activity-${{ github.event_name }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare activity payloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if test "${{ github.event_name }}" = "workflow_dispatch"; then
+            gh api "repos/${{ github.repository }}/commits?per_page=8" > "$RUNNER_TEMP/commits.json"
+            gh api "repos/${{ github.repository }}/issues?state=all&sort=updated&direction=desc&per_page=8" > "$RUNNER_TEMP/issues.json"
+            gh api "repos/${{ github.repository }}/pulls?state=all&sort=updated&direction=desc&per_page=8" > "$RUNNER_TEMP/pulls.json"
+            gh api "repos/${{ github.repository }}/deployments?per_page=5" > "$RUNNER_TEMP/deployments.json"
+            gh api "repos/${{ github.repository }}/actions/runs?per_page=8" > "$RUNNER_TEMP/runs.json"
+            jq -n --slurpfile commits "$RUNNER_TEMP/commits.json" --slurpfile issues "$RUNNER_TEMP/issues.json" --slurpfile pulls "$RUNNER_TEMP/pulls.json" --slurpfile deployments "$RUNNER_TEMP/deployments.json" --slurpfile runs "$RUNNER_TEMP/runs.json" \
+              '{commits: $commits[0], issues: $issues[0], pulls: $pulls[0], deployments: $deployments[0], runs: $runs[0].workflow_runs}' > "$RUNNER_TEMP/activity-seed.json"
+            node scripts/activity-event.mjs seed "$RUNNER_TEMP/activity-seed.json" > "$RUNNER_TEMP/activity.jsonl"
+          else
+            node scripts/activity-event.mjs "${{ github.event_name }}" "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/activity.jsonl"
+          fi
+
+      - name: Record activity on Wahl
+        env:
+          STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
+          SUPABASE_URL: ${{ secrets.WAHL_SUPABASE_URL }}
+        run: |
+          while IFS= read -r body; do
+            test -z "$body" && continue
+            curl --fail-with-body --silent --show-error --request POST \
+              --header "Authorization: Bearer $STATUS_CALLBACK_TOKEN" \
+              --header "Content-Type: application/json" --data "$body" \
+              "$SUPABASE_URL/functions/v1/record-wahl-activity"
+          done < "$RUNNER_TEMP/activity.jsonl"
