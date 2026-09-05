@@ -2,3 +2,6 @@ project_id = "rzmgyvkvfjbcsxegafko"
 
 [functions.dispatch-wahl-fix]
 verify_jwt = false
+
+[functions.update-wahl-fix]
+verify_jwt = false

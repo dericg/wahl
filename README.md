@@ -31,11 +31,18 @@ For each eligible thought, Wahl creates one `automation_requests` record and dis
 3. Runs Codex in an ephemeral session under the constraints in `AGENTS.md`.
 4. Builds the site to validate the proposed change.
 5. If files changed, creates a `codex/wahl-fix-<request-id>` branch and opens a pull request that references the issue.
+6. Reports the final result and pull-request URL back to Supabase.
 
-The automation record supports `queued`, `working`, `pr_ready`, `failed`, and `closed` states. If dispatch fails, Wahl removes the optimistic sent state from the page and displays the error so the owner can retry. An expired session requires signing in again.
+The automation record supports `queued`, `working`, `pr_ready`, `no_change`, `failed`, and `closed` states. The wall checks Supabase every ten seconds while work is active, and **View progress** opens the latest status inside Wahl with a manual refresh fallback. A successful run links to its review pull request; a no-change or failed run displays an explicit outcome. If initial dispatch fails, Wahl removes the optimistic sent state from the page and displays the error so the owner can retry. An expired session requires signing in again.
 
-### Known status limitation
+### Automation configuration
 
-The GitHub workflow currently does not report completion back to Supabase, and the wall does not poll GitHub or reinvoke the Edge Function after dispatch. As a result, a successful request will normally remain labeled **Sent to Codex** with a **View progress** link, even after its pull request is ready. The Edge Function can discover an existing pull request and update the record when called again, but the current UI does not provide that refresh path. Status synchronization should be implemented before relying on **Codex is working**, **Pull request ready**, **Needs attention**, or the pull-request link as automatic live indicators.
+The workflow requires these GitHub Actions secrets:
 
-The workflow requires an Actions secret named `OPENAI_API_KEY`. The Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. It never merges or deploys automatically.
+- `OPENAI_API_KEY` for the Codex action
+- `WAHL_SUPABASE_URL` for the deployed Supabase project URL
+- `WAHL_STATUS_CALLBACK_TOKEN` for authenticated workflow status updates
+
+The `dispatch-wahl-fix` Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. The `update-wahl-fix` Edge Function requires the same `WAHL_STATUS_CALLBACK_TOKEN` value stored as a Supabase secret. Use a long random value and never expose it to the browser or commit it.
+
+Before enabling callbacks, apply the database migration that adds `no_change`, deploy both Edge Functions, and configure the matching GitHub and Supabase secrets. The automation never merges or deploys automatically.

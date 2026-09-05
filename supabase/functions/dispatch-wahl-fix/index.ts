@@ -41,6 +41,7 @@ Deno.serve(async (request) => {
   if (postError) return json({ error: "The fix request could not be read" }, 500);
   const policyError = validateFixRequest({ owner: Boolean(owner), userId: user.id, post });
   if (policyError) return json({ error: policyError.error }, policyError.status);
+  if (!post) return json({ error: "This post is not an eligible private fix request" }, 400);
 
   const { data: existing } = await userClient.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at").eq("post_id", post.id).maybeSingle();
   if (existing) {

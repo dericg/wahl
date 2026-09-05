@@ -4,6 +4,7 @@ import { INITIAL_POSTS } from "./data";
 import { isCloudConfigured, supabase } from "./supabase";
 import ThoughtEditor from "./ThoughtEditor";
 import { draftDetails, FormattedText } from "./formattedText";
+import { fixPresentation, hasActiveFix } from "./fixStatus";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -79,11 +80,33 @@ function Composer({ onPost, busy }) {
   );
 }
 
-function PostCard({ post, owner, onDelete, onSendFix, fix }) {
+function PostCard({ post, owner, onDelete, onSendFix, onRefreshFix, fix }) {
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [progressError, setProgressError] = useState("");
   const privatePost = post.audience_type === "private";
   const fixRequest = owner && privatePost && /#fix\b/i.test(post.text);
   const Icon = privatePost ? Lock : Globe2;
-  const fixStatus = fix?.status === "pr_ready" ? "Pull request ready" : fix?.status === "working" ? "Codex is working" : fix?.status === "failed" ? "Needs attention" : fix ? "Sent to Codex" : "Site improvement";
+  const progress = fixPresentation(fix?.status);
+
+  async function refreshProgress() {
+    if (refreshing || previewMode || !fix?.id) return;
+    setRefreshing(true);
+    setProgressError("");
+    try {
+      await onRefreshFix(post.id);
+    } catch {
+      setProgressError("Progress couldn’t be refreshed. The last known status is still shown.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  function toggleProgress() {
+    setProgressOpen((open) => !open);
+    if (!progressOpen) refreshProgress();
+  }
+
   return (
     <article className="post-card">
       <header className="post-header">
@@ -91,7 +114,21 @@ function PostCard({ post, owner, onDelete, onSendFix, fix }) {
         <div className="post-tools"><span className="audience-badge"><Icon size={12} />{privatePost ? "Only me" : "Everyone"}</span>{owner && <button className="delete-post" type="button" onClick={() => onDelete(post.id)} aria-label="Delete this post"><Trash2 size={13} /></button>}</div>
       </header>
       <p><FormattedText text={post.text} /></p>
-      {fixRequest && <div className="fix-request"><span>{fixStatus}</span>{fix?.pull_request_url ? <a href={fix.pull_request_url} target="_blank" rel="noreferrer">Review pull request</a> : fix ? <a href="https://github.com/dericg/wahl/actions/workflows/wahl-fix.yml" target="_blank" rel="noreferrer">View progress</a> : <button type="button" onClick={() => onSendFix(post.id)}>Send to Codex</button>}</div>}
+      {fixRequest && <div className="fix-request">
+        <span>{progress.label}</span>
+        {fix ? <button type="button" onClick={toggleProgress} aria-expanded={progressOpen} aria-controls={`fix-progress-${post.id}`}>{progressOpen ? "Hide progress" : "View progress"}</button> : <button type="button" onClick={() => onSendFix(post.id)}>Send to Codex</button>}
+        {fix && progressOpen && <div className="fix-progress" id={`fix-progress-${post.id}`}>
+          <div role="status" aria-live="polite">
+            <p>{previewMode ? "This is a local preview. No request was sent to Codex." : progress.description}</p>
+            {fix.updated_at && <p className="fix-updated">Last updated <time dateTime={fix.updated_at}>{new Date(fix.updated_at).toLocaleString()}</time></p>}
+            {progressError && <p>{progressError}</p>}
+          </div>
+          <div className="fix-progress-actions">
+            {!previewMode && <button type="button" onClick={refreshProgress} disabled={refreshing || !fix.id}>{refreshing ? "Refreshing…" : "Refresh progress"}</button>}
+            {fix.pull_request_url && <a href={fix.pull_request_url} target="_blank" rel="noreferrer">{fix.status === "closed" ? "View pull request" : "Review pull request"}</a>}
+          </div>
+        </div>}
+      </div>}
     </article>
   );
 }
@@ -138,6 +175,12 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [fixes, setFixes] = useState({});
 
+  async function loadFixes() {
+    if (!supabase) return;
+    const { data, error } = await supabase.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at");
+    if (!error) setFixes(Object.fromEntries((data || []).map((fix) => [fix.post_id, fix])));
+  }
+
   async function loadWall() {
     if (!supabase) return;
     setLoading(true);
@@ -160,6 +203,12 @@ export default function App() {
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => { setSession(nextSession); window.setTimeout(loadWall, 0); });
     return () => data.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !session || !owner || !hasActiveFix(fixes)) return undefined;
+    const interval = window.setInterval(loadFixes, 10_000);
+    return () => window.clearInterval(interval);
+  }, [session, owner, fixes]);
 
   async function addPost({ text, audience }) {
     if (previewMode) {
@@ -222,13 +271,27 @@ export default function App() {
     setNotice("");
   }
 
+  async function refreshFix(postId) {
+    if (previewMode) return;
+    if (!supabase || !session || !owner || !fixes[postId]?.id) throw new Error("Owner access required");
+    const { data: authData } = await supabase.auth.getSession();
+    const accessToken = authData.session?.access_token;
+    if (!accessToken) throw new Error("Session expired");
+    const { data, error } = await supabase.functions.invoke("dispatch-wahl-fix", {
+      body: { postId },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (error || !data?.request) throw new Error("Progress unavailable");
+    setFixes((current) => ({ ...current, [postId]: data.request }));
+  }
+
   return (
     <main><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
       <header className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></header>
       <PersonalNote />
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
-      <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts`}</span></div>{!loading && posts.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{posts.map((post) => <PostCard key={post.id} post={post} owner={owner} onDelete={deletePost} onSendFix={sendFix} fix={fixes[post.id]} />)}</section>
+      <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts`}</span></div>{!loading && posts.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{posts.map((post) => <PostCard key={post.id} post={post} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[post.id]} />)}</section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></footer>
     </div></main>
   );
