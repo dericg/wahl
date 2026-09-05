@@ -184,14 +184,35 @@ export default function App() {
       return;
     }
     setFixes((current) => ({ ...current, [postId]: { post_id: postId, status: "queued" } }));
-    const { data, error } = await supabase.functions.invoke("dispatch-wahl-fix", { body: { postId } });
-    if (error) {
+    const { data: authData } = await supabase.auth.getSession();
+    const accessToken = authData.session?.access_token;
+    if (!accessToken) {
       setFixes((current) => {
         const next = { ...current };
         delete next[postId];
         return next;
       });
-      setNotice("The fix couldn’t be sent. Please try again shortly.");
+      setNotice("Your session expired. Sign in again, then resend the fix.");
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke("dispatch-wahl-fix", {
+      body: { postId },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (error) {
+      let message = "The fix couldn’t be sent. Please try again shortly.";
+      try {
+        const response = await error.context?.json();
+        if (response?.error) message = response.error;
+      } catch {
+        // Keep the useful fallback when the platform returns a non-JSON error.
+      }
+      setFixes((current) => {
+        const next = { ...current };
+        delete next[postId];
+        return next;
+      });
+      setNotice(message);
       return;
     }
     setFixes((current) => ({ ...current, [postId]: data.request }));
