@@ -57,6 +57,10 @@ function Composer({ onPost, busy }) {
   async function submit() {
     const text = draft.trim();
     if (!text || busy) return;
+    if (/#fix\b/i.test(text) && audience !== "private") {
+      setAudience("private");
+      return;
+    }
     const saved = await onPost({ text, audience });
     if (saved) setDraft("");
   }
@@ -69,14 +73,28 @@ function Composer({ onPost, busy }) {
         <button className={`audience-pill ${audience === "private" ? "selected" : ""}`} onClick={() => setAudience("private")} type="button" aria-pressed={audience === "private"}><Lock size={13} />Only me</button>
         <button className={`audience-pill ${audience === "everyone" ? "selected" : ""}`} onClick={() => setAudience("everyone")} type="button" aria-pressed={audience === "everyone"}><Globe2 size={13} />Everyone</button>
       </div>
-      <div className="composer-footer"><span>{draft.length ? `${draft.length} / 320` : audience === "private" ? "a private draft, visible only to you" : "published to your public wall"}</span><button className="post-button" type="button" disabled={!draft.trim() || busy} onClick={submit}>{busy ? "Posting…" : "Post"}</button></div>
+      <div className="composer-footer"><span>{/#fix\b/i.test(draft) && audience !== "private" ? "#fix requests must be private — press Post to switch" : draft.length ? `${draft.length} / 320` : audience === "private" ? "a private draft, visible only to you" : "published to your public wall"}</span><button className="post-button" type="button" disabled={!draft.trim() || busy} onClick={submit}>{busy ? "Posting…" : "Post"}</button></div>
     </section>
   );
 }
 
 function PostCard({ post, owner, onDelete }) {
   const privatePost = post.audience_type === "private";
+  const fixRequest = owner && privatePost && /#fix\b/i.test(post.text);
   const Icon = privatePost ? Lock : Globe2;
+  const fixTitle = post.text.replace(/#fix\b/gi, "").trim().slice(0, 72) || "Improve Wahl";
+  const fixBody = [
+    "## Thought from Wahl",
+    "",
+    post.text,
+    "",
+    `Wahl post ID: \`${post.id}\``,
+    "",
+    "## Requested outcome",
+    "",
+    "Interpret this thought as a focused improvement to Wahl. Preserve the site's minimal character and follow AGENTS.md. Create a reviewable change; do not merge or deploy it.",
+  ].join("\n");
+  const fixUrl = `https://github.com/dericg/wahl/issues/new?labels=wahl-fix&title=${encodeURIComponent(`[Wahl fix] ${fixTitle}`)}&body=${encodeURIComponent(fixBody)}`;
   return (
     <article className="post-card">
       <header className="post-header">
@@ -84,6 +102,7 @@ function PostCard({ post, owner, onDelete }) {
         <div className="post-tools"><span className="audience-badge"><Icon size={12} />{privatePost ? "Only me" : "Everyone"}</span>{owner && <button className="delete-post" type="button" onClick={() => onDelete(post.id)} aria-label="Delete this post"><Trash2 size={13} /></button>}</div>
       </header>
       <p>{post.text}</p>
+      {fixRequest && <div className="fix-request"><span>Site improvement</span><a href={fixUrl} target="_blank" rel="noreferrer">Send to Codex</a></div>}
     </article>
   );
 }

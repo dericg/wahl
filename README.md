@@ -19,3 +19,9 @@ Without Supabase environment variables, the development server runs as an intera
 2. Copy `.env.example` to `.env.local` and add the project URL and publishable key.
 3. Start Wahl, use **Owner sign in** once, then register that account in `site_owners` using the final query documented in the schema.
 4. Add the production site URL to the allowed redirect URLs in Supabase Auth before deploying.
+
+## `#fix` automation
+
+The owner can publish a private thought containing `#fix`, then choose **Send to Codex** on that post. Wahl opens a prefilled issue in the private GitHub repository. Submitting that issue starts `.github/workflows/wahl-fix.yml`, which asks Codex to implement the request on a dedicated branch, validates the production build, and opens a pull request for review.
+
+The workflow requires an Actions secret named `OPENAI_API_KEY`. It accepts only issues opened by the repository owner with the `wahl-fix` label. It never merges or deploys automatically.
