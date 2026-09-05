@@ -45,6 +45,7 @@ revoke all on public.automation_requests from anon, authenticated;
 grant select on public.posts to anon, authenticated;
 grant insert, update, delete on public.posts to authenticated;
 grant select on public.automation_requests to authenticated;
+grant insert on public.automation_requests to authenticated;
 
 drop policy if exists "Public posts are readable" on public.posts;
 create policy "Public posts are readable" on public.posts for select to anon, authenticated
@@ -66,6 +67,22 @@ using (public.is_wahl_owner() and author_id = (select auth.uid()));
 drop policy if exists "Owner can read automation requests" on public.automation_requests;
 create policy "Owner can read automation requests" on public.automation_requests for select to authenticated
 using (public.is_wahl_owner() and requested_by = (select auth.uid()));
+
+drop policy if exists "Owner can queue automation requests" on public.automation_requests;
+create policy "Owner can queue automation requests" on public.automation_requests for insert to authenticated
+with check (
+  public.is_wahl_owner()
+  and requested_by = (select auth.uid())
+  and status = 'queued'
+  and pull_request_url is null
+  and exists (
+    select 1 from public.posts
+    where posts.id = post_id
+      and posts.author_id = (select auth.uid())
+      and posts.audience_type = 'private'
+      and posts.text ~* '#fix\y'
+  )
+);
 
 -- After signing in once, register the owner from the Supabase SQL editor:
 -- insert into public.site_owners (user_id)

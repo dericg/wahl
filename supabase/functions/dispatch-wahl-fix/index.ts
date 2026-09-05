@@ -42,7 +42,7 @@ Deno.serve(async (request) => {
   const policyError = validateFixRequest({ owner: Boolean(owner), userId: user.id, post });
   if (policyError) return json({ error: policyError.error }, policyError.status);
 
-  const { data: existing } = await admin.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at").eq("post_id", post.id).maybeSingle();
+  const { data: existing } = await userClient.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at").eq("post_id", post.id).maybeSingle();
   if (existing) {
     const branch = `codex/wahl-fix-${existing.id}`;
     const pulls = await fetch(`https://api.github.com/repos/dericg/wahl/pulls?state=all&head=dericg:${encodeURIComponent(branch)}`, {
@@ -73,12 +73,12 @@ Deno.serve(async (request) => {
     return json({ request: existing });
   }
 
-  const { data: automation, error: insertError } = await admin.from("automation_requests").insert({
+  const { data: automation, error: insertError } = await userClient.from("automation_requests").insert({
     post_id: post.id,
     requested_by: user.id,
     status: "queued",
   }).select("id,post_id,status,pull_request_url,updated_at").single();
-  if (insertError) return json({ error: "The automation request could not be created" }, 500);
+  if (insertError) return json({ error: `The automation request could not be created (${insertError.code || "database error"})` }, 500);
 
   const dispatch = await fetch("https://api.github.com/repos/dericg/wahl/actions/workflows/wahl-fix.yml/dispatches", {
     method: "POST",
