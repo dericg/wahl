@@ -28,10 +28,21 @@ create table if not exists public.automation_requests (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.repository_activity (
+  source_id text primary key check (char_length(source_id) between 1 and 160),
+  kind text not null check (kind in ('Commit', 'Issue', 'Pull request', 'Deployment', 'Workflow')),
+  summary text not null check (char_length(summary) between 1 and 320),
+  url text not null check (url ~ '^https://github.com/dericg/wahl(/|$)'),
+  occurred_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_posts_created_at on public.posts (created_at desc);
+create index if not exists idx_repository_activity_occurred_at on public.repository_activity (occurred_at desc);
 alter table public.site_owners enable row level security;
 alter table public.posts enable row level security;
 alter table public.automation_requests enable row level security;
+alter table public.repository_activity enable row level security;
 
 create or replace function public.is_wahl_owner()
 returns boolean language sql stable security definer set search_path = public
@@ -48,6 +59,12 @@ grant select on public.posts to anon, authenticated;
 grant insert, update, delete on public.posts to authenticated;
 grant select on public.automation_requests to authenticated;
 grant insert on public.automation_requests to authenticated;
+revoke all on public.repository_activity from anon, authenticated;
+grant select on public.repository_activity to anon, authenticated;
+
+drop policy if exists "Repository activity is publicly readable" on public.repository_activity;
+create policy "Repository activity is publicly readable" on public.repository_activity for select to anon, authenticated
+using (true);
 
 drop policy if exists "Public posts are readable" on public.posts;
 create policy "Public posts are readable" on public.posts for select to anon, authenticated

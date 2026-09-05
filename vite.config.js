@@ -9,7 +9,7 @@ const { version } = JSON.parse(readFileSync(new URL("./package.json", import.met
 
 function getCommitHistory() {
   try {
-    return execFileSync("git", ["log", "-5", "--format=%h%x09%cs%x09%s"], {
+    return execFileSync("git", ["log", "-5", "--format=%h%x09%cI%x09%s"], {
       cwd: projectRoot,
       encoding: "utf8",
     }).trim().split("\n").filter(Boolean).map((line) => {

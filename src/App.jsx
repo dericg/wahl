@@ -5,6 +5,7 @@ import { isCloudConfigured, supabase } from "./supabase";
 import ThoughtEditor from "./ThoughtEditor";
 import { draftDetails, FormattedText } from "./formattedText";
 import { fixPresentation, hasActiveFix } from "./fixStatus";
+import { mergeActivity, wallEntries } from "./activity";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -50,6 +51,18 @@ function ReleaseHistory() {
         </li>)}</ol> : <p>Commit history is unavailable in this build.</p>}
       </div>}
     </section>
+  );
+}
+
+function ActivityCard({ activity }) {
+  return (
+    <article className="post-card activity-card" aria-label={`${activity.kind} from GitHub`}>
+      <header className="post-header">
+        <div><strong>Wahl</strong><time dateTime={activity.occurred_at}>{timeAgo(activity.occurred_at)}</time></div>
+        <span className="activity-kind">{activity.kind}</span>
+      </header>
+      <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a></p>
+    </article>
   );
 }
 
@@ -174,6 +187,26 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fixes, setFixes] = useState({});
+  const [activity, setActivity] = useState(() => mergeActivity([], __WAHL_RELEASE__.commits));
+  const [activityLoading, setActivityLoading] = useState(Boolean(supabase));
+  const [activityUnavailable, setActivityUnavailable] = useState(false);
+  const entries = wallEntries(posts, activity);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let active = true;
+    supabase.from("repository_activity")
+      .select("source_id,kind,summary,url,occurred_at")
+      .order("occurred_at", { ascending: false })
+      .limit(24)
+      .then(({ data, error }) => {
+        if (!active) return;
+        setActivity(mergeActivity(data || [], __WAHL_RELEASE__.commits));
+        setActivityUnavailable(Boolean(error));
+        setActivityLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   async function loadFixes() {
     if (!supabase) return;
@@ -291,7 +324,7 @@ export default function App() {
       <PersonalNote />
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
-      <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts`}</span></div>{!loading && posts.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{posts.map((post) => <PostCard key={post.id} post={post} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[post.id]} />)}</section>
+      <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading || activityLoading ? "loading…" : `${entries.length} entries`}</span></div>{activityUnavailable && <p className="activity-notice" role="status">Some live GitHub activity is unavailable. Recent commits from this build are shown.</p>}{!loading && !activityLoading && entries.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{entries.map((entry) => entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} /> : <PostCard key={entry.id} post={entry} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}</section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></footer>
     </div></main>
   );
