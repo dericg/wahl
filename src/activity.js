@@ -36,6 +36,11 @@ export function wallEntries(posts = [], activity = []) {
   ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at) || String(left.id).localeCompare(String(right.id)));
 }
 
+export function filterWallEntries(entries, filter) {
+  if (filter === "issues") return entries.filter((entry) => entry.entry_type === "activity" && entry.kind === "Issue");
+  return entries;
+}
+
 export function activityPayloads(eventName, payload) {
   const repository = payload.repository?.full_name;
   if (repository !== "dericg/wahl") return [];

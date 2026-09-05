@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityPayloads, mergeActivity, releaseActivity, snapshotActivity, wallEntries } from "../src/activity.js";
+import { activityPayloads, filterWallEntries, mergeActivity, releaseActivity, snapshotActivity, wallEntries } from "../src/activity.js";
 import { validateActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 
 const repository = { full_name: "dericg/wahl" };
@@ -22,6 +22,16 @@ test("thoughts and GitHub events form one chronological wall feed", () => {
   const entries = wallEntries(posts, activity);
   assert.deepEqual(entries.map((entry) => entry.entry_type), ["activity", "thought"]);
   assert.equal(entries[0].id, "github:issue:6");
+});
+
+test("issues filter returns only GitHub issue events", () => {
+  const entries = [
+    { id: "thought", entry_type: "thought" },
+    { id: "github:issue:6", entry_type: "activity", kind: "Issue" },
+    { id: "github:pr:15", entry_type: "activity", kind: "Pull request" },
+  ];
+  assert.deepEqual(filterWallEntries(entries, "issues"), [entries[1]]);
+  assert.equal(filterWallEntries(entries, "all"), entries);
 });
 
 test("GitHub events normalize without trusting deployment target URLs", () => {
