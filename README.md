@@ -13,6 +13,14 @@ The launch MVP is a single-page personal website backed by Supabase Postgres. Pu
 
 Without Supabase environment variables, the development server runs as an interactive local preview. Production builds without those variables are read-only.
 
+## Repository activity
+
+The wall mixes thoughts with recent public activity from `dericg/wahl`, newest first: commits on the default branch, opened/closed issues, opened/closed/merged pull requests, GitHub deployments and their latest status, and workflow runs. Activity cards link to GitHub and have no editing controls.
+
+Each page load makes bounded, unauthenticated GitHub API requests (up to ten); no token or additional configuration is required. This is a recent snapshot, not a complete archive: it reads up to ten records per source and five deployments, without polling. Deployments appear only when recorded in GitHub; publishing through Sites alone does not create a GitHub deployment. Private repository activity is not fetched. If GitHub is unavailable or rate limited, the wall keeps working, shows a small availability message, and uses the build's five commits as a fallback. Commit timestamps include time and timezone for ordering alongside thoughts.
+
+Repository events are read-only external data and are not stored as Supabase posts. Existing post audiences and owner-only access to private thoughts and automation requests remain enforced by row-level security.
+
 ## Production setup
 
 1. Create a Supabase project and run `database/schema.sql` in its SQL editor.

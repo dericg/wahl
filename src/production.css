@@ -1,4 +1,13 @@
 .post-tools { display: flex; align-items: center !important; gap: 7px !important; }
+.activity-card { background: transparent; box-shadow: none; border-color: rgba(81,57,35,.65); }
+.activity-card .post-header { flex-wrap: wrap; gap: 6px 12px; }
+.activity-kind { color: var(--muted); font-size: 10px; }
+.activity-card > p { margin-bottom: 0; font-size: 13px; overflow-wrap: anywhere; }
+.activity-card a { color: var(--muted); text-decoration: none; }
+.activity-card a:hover { color: var(--ink); text-decoration: underline; }
+.activity-card a:focus-visible, .activity-notice a:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.activity-notice { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.activity-notice a { color: var(--brass); }
 .delete-post { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; border: 0; background: transparent; color: #806c52; cursor: pointer; }
 .delete-post:hover { color: #bc6259; }
 .notice, .empty-wall { border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px; color: var(--muted); font-size: 12px; line-height: 1.5; }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, Globe2, Lock, LogIn, LogOut, Trash2 } from "lucide-react";
 import { INITIAL_POSTS } from "./data";
 import { isCloudConfigured, supabase } from "./supabase";
+import { commitEvents, loadActivity, wallEntries } from "./activity";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -41,7 +42,7 @@ function ReleaseHistory() {
       {open && <div className="release-list">
         <small>Recent changes</small>
         {commits.length ? <ol>{commits.map((commit) => <li key={commit.hash}>
-          <time dateTime={commit.date}>{commit.date}</time>
+          <time dateTime={commit.date}>{commit.date.slice(0, 10)}</time>
           <span>{commit.message}</span>
           <code>{commit.hash}</code>
         </li>)}</ol> : <p>Commit history is unavailable in this build.</p>}
@@ -93,6 +94,18 @@ function PostCard({ post, owner, onDelete, onSendFix, fix }) {
   );
 }
 
+function ActivityCard({ activity }) {
+  return (
+    <article className="post-card activity-card" aria-label={`${activity.kind} event`}>
+      <header className="post-header">
+        <div><strong>Wahl</strong><time dateTime={activity.created_at} title={new Date(activity.created_at).toLocaleString()}>{timeAgo(activity.created_at)}</time></div>
+        <span className="activity-kind">{activity.kind}</span>
+      </header>
+      <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.text}</a></p>
+    </article>
+  );
+}
+
 function SignIn({ session, owner }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -134,6 +147,23 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fixes, setFixes] = useState({});
+  const [activity, setActivity] = useState(() => commitEvents(__WAHL_RELEASE__.commits));
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityUnavailable, setActivityUnavailable] = useState(false);
+  const entries = wallEntries(posts, activity);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    loadActivity({ signal: controller.signal, fallbackCommits: __WAHL_RELEASE__.commits }).then((result) => {
+      if (!active) return;
+      setActivity(result.events);
+      setActivityUnavailable(result.unavailable);
+      setActivityLoading(false);
+    }).finally(() => window.clearTimeout(timeout));
+    return () => { active = false; controller.abort(); window.clearTimeout(timeout); };
+  }, []);
 
   async function loadWall() {
     if (!supabase) return;
@@ -225,7 +255,15 @@ export default function App() {
       <PersonalNote />
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
-      <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts`}</span></div>{!loading && posts.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{posts.map((post) => <PostCard key={post.id} post={post} owner={owner} onDelete={deletePost} onSendFix={sendFix} fix={fixes[post.id]} />)}</section>
+      <section className="feed" aria-label="The Wall">
+        <div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts · ${activity.length} events`}</span></div>
+        {activityLoading && <p className="activity-notice" role="status">Loading repository activity…</p>}
+        {activityUnavailable && <p className="activity-notice" role="status">Some repository activity is unavailable. <a href="https://github.com/dericg/wahl" target="_blank" rel="noreferrer">View on GitHub</a></p>}
+        {!loading && !activityLoading && entries.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}
+        {entries.map((entry) => entry.entryType === "activity"
+          ? <ActivityCard key={entry.id} activity={entry} />
+          : <PostCard key={entry.id} post={entry} owner={owner} onDelete={deletePost} onSendFix={sendFix} fix={fixes[entry.id]} />)}
+      </section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></footer>
     </div></main>
   );
