@@ -27,6 +27,29 @@ function PersonalNote() {
   );
 }
 
+function ReleaseHistory() {
+  const [open, setOpen] = useState(false);
+  const { version, commits } = __WAHL_RELEASE__;
+  const currentCommit = commits[0]?.hash;
+
+  return (
+    <section className={`release-history ${open ? "open" : ""}`} aria-label="Wahl release history">
+      <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <span>Version {version}{currentCommit ? ` · ${currentCommit}` : ""}</span>
+        <ChevronDown size={13} />
+      </button>
+      {open && <div className="release-list">
+        <small>Recent changes</small>
+        {commits.length ? <ol>{commits.map((commit) => <li key={commit.hash}>
+          <time dateTime={commit.date}>{commit.date}</time>
+          <span>{commit.message}</span>
+          <code>{commit.hash}</code>
+        </li>)}</ol> : <p>Commit history is unavailable in this build.</p>}
+      </div>}
+    </section>
+  );
+}
+
 function Composer({ onPost, busy }) {
   const [draft, setDraft] = useState("");
   const [audience, setAudience] = useState("everyone");
@@ -154,7 +177,7 @@ export default function App() {
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
       <section className="feed" aria-label="The Wall"><div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${posts.length} thoughts`}</span></div>{!loading && posts.length === 0 && <div className="empty-wall">The wall is quiet for now.</div>}{posts.map((post) => <PostCard key={post.id} post={post} owner={owner} onDelete={deletePost} />)}</section>
-      <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p><div className="owner-access"><SignIn session={session} owner={owner} /></div></footer>
+      <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></footer>
     </div></main>
   );
 }

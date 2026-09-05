@@ -15,3 +15,15 @@
 .password-sign-in button { justify-self: end; }
 .account-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; width: 100%; }
 .account-message { flex-basis: 100%; color: var(--muted); font-size: 9px; }
+.release-history { width: min(100%, 390px); margin: 14px auto 0; }
+.release-history > button { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #675640; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.release-history > button:hover { color: var(--muted); }
+.release-history > button svg { transition: transform .2s ease; }
+.release-history.open > button svg { transform: rotate(180deg); }
+.release-list { margin-top: 12px; padding: 12px 0 2px; border-top: 1px solid rgba(81,57,35,.55); text-align: left; animation: reveal .2s ease; }
+.release-list > small { display: block; margin-bottom: 8px; color: #675640; font-size: 8px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+.release-list ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.release-list li { display: grid; grid-template-columns: 68px 1fr auto; gap: 8px; align-items: baseline; color: var(--muted); font-size: 9px; line-height: 1.35; }
+.release-list time, .release-list code { color: #675640; font: inherit; white-space: nowrap; }
+.release-list p { margin: 0; color: var(--muted); font: 9px/1.4 "DM Sans", sans-serif; }
+@media(max-width:520px){.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}
