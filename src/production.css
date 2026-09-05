@@ -1,4 +1,11 @@
 .post-tools { display: flex; align-items: center !important; gap: 7px !important; }
+.formatting-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; color: var(--muted); font-size: 10px; }
+.formatting-controls button { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
+.formatting-controls button:hover:not(:disabled) { color: var(--ink); border-color: var(--brass); }
+.formatting-controls button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.formatting-controls button:disabled { opacity: .42; cursor: default; }
+.formatting-controls span { flex: 1 1 180px; line-height: 1.5; }
+.post-card > p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .delete-post { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; border: 0; background: transparent; color: #806c52; cursor: pointer; }
 .delete-post:hover { color: #bc6259; }
 .notice, .empty-wall { border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px; color: var(--muted); font-size: 12px; line-height: 1.5; }

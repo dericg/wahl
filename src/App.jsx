@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Globe2, Lock, LogIn, LogOut, Trash2 } from "lucide-react";
 import { INITIAL_POSTS } from "./data";
 import { isCloudConfigured, supabase } from "./supabase";
+import { formatPostText } from "./postText";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -53,6 +54,19 @@ function ReleaseHistory() {
 function Composer({ onPost, busy }) {
   const [draft, setDraft] = useState("");
   const [audience, setAudience] = useState("everyone");
+  const thoughtRef = useRef(null);
+
+  function applyFormatting(marker) {
+    const input = thoughtRef.current;
+    const { selectionStart: start, selectionEnd: end } = input;
+    const next = `${draft.slice(0, start)}${marker}${draft.slice(start, end)}${marker}${draft.slice(end)}`;
+    if (busy || next.length > 320) return;
+    setDraft(next);
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + marker.length, end + marker.length);
+    });
+  }
 
   async function submit() {
     const text = draft.trim();
@@ -66,7 +80,12 @@ function Composer({ onPost, busy }) {
   return (
     <section className="composer" aria-label="Create a post">
       <label htmlFor="thought">what’s the thought?</label>
-      <textarea id="thought" value={draft} maxLength={320} rows={3} onChange={(event) => setDraft(event.target.value)} placeholder="Type it before it disappears…" />
+      <textarea ref={thoughtRef} id="thought" value={draft} maxLength={320} rows={3} onChange={(event) => setDraft(event.target.value)} aria-describedby="formatting-help" placeholder="Type it before it disappears…" />
+      <div className="formatting-controls" role="group" aria-label="Format text">
+        <button type="button" disabled={busy || draft.length > 316} onClick={() => applyFormatting("**")}><strong>Bold</strong></button>
+        <button type="button" disabled={busy || draft.length > 318} onClick={() => applyFormatting("_")}><em>Italic</em></button>
+        <span id="formatting-help">Use **bold** or _italic_. Markers count toward 320.</span>
+      </div>
       <div className="audience-row" aria-label="Choose who can see this">
         <button className={`audience-pill ${audience === "private" ? "selected" : ""}`} onClick={() => setAudience("private")} type="button" aria-pressed={audience === "private"}><Lock size={13} />Only me</button>
         <button className={`audience-pill ${audience === "everyone" ? "selected" : ""}`} onClick={() => setAudience("everyone")} type="button" aria-pressed={audience === "everyone"}><Globe2 size={13} />Everyone</button>
@@ -87,7 +106,7 @@ function PostCard({ post, owner, onDelete, onSendFix, fix }) {
         <div><strong className="mine">Deric</strong><time dateTime={new Date(post.created_at).toISOString()}>{timeAgo(post.created_at)}</time></div>
         <div className="post-tools"><span className="audience-badge"><Icon size={12} />{privatePost ? "Only me" : "Everyone"}</span>{owner && <button className="delete-post" type="button" onClick={() => onDelete(post.id)} aria-label="Delete this post"><Trash2 size={13} /></button>}</div>
       </header>
-      <p>{post.text}</p>
+      <p>{formatPostText(post.text)}</p>
       {fixRequest && <div className="fix-request"><span>{fixStatus}</span>{fix?.pull_request_url ? <a href={fix.pull_request_url} target="_blank" rel="noreferrer">Review pull request</a> : fix ? <a href="https://github.com/dericg/wahl/actions/workflows/wahl-fix.yml" target="_blank" rel="noreferrer">View progress</a> : <button type="button" onClick={() => onSendFix(post.id)}>Send to Codex</button>}</div>}
     </article>
   );
