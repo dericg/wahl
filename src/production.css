@@ -11,3 +11,7 @@
 .sign-in input { min-width: 0; border: 1px solid var(--line); border-radius: 5px; background: #160e09; color: var(--ink); padding: 7px 9px; font-size: 11px; }
 .sign-in button { border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--brass); padding: 7px 10px; font-size: 10px; cursor: pointer; }
 .sign-in small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
+.password-sign-in { grid-template-columns: 1fr; }
+.password-sign-in button { justify-self: end; }
+.account-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; width: 100%; }
+.account-message { flex-basis: 100%; color: var(--muted); font-size: 9px; }

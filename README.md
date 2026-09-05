@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-The launch MVP is a single-page personal website backed by Supabase Postgres. Public visitors can read published posts; the registered owner can sign in by email, publish posts, keep private drafts, and delete entries. Row-level security enforces access in the database.
+The launch MVP is a single-page personal website backed by Supabase Postgres. Public visitors can read published posts; the registered owner can sign in with email and password, publish posts, keep private drafts, and delete entries. Row-level security enforces access in the database.
 
 Without Supabase environment variables, the development server runs as an interactive local preview. Production builds without those variables are read-only.
 

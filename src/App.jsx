@@ -68,19 +68,34 @@ function PostCard({ post, owner, onDelete }) {
 function SignIn({ session, owner }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function sendLink(event) {
+  async function signIn(event) {
     event.preventDefault();
-    setMessage("Sending…");
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-    setMessage(error ? error.message : "Check your email for the sign-in link.");
+    setMessage("Signing in…");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setMessage(error ? "That email and password didn’t match." : "");
+  }
+
+  async function updatePassword(event) {
+    event.preventDefault();
+    setMessage("Saving…");
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) setMessage(error.message);
+    else { setPassword(""); setChangingPassword(false); setMessage("Password saved."); }
   }
 
   if (!isCloudConfigured) return <span>{previewMode ? "Local preview" : "Read-only"}</span>;
-  if (session) return <button className="quiet-button" type="button" onClick={() => supabase.auth.signOut()}><LogOut size={12} />{owner ? "Sign out" : "Not authorized · sign out"}</button>;
+  if (session && owner) return <div className="account-controls">
+    {changingPassword ? <form className="sign-in" onSubmit={updatePassword}><input type="password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="New password" aria-label="New password" /><button type="submit">Save password</button></form> : <button className="quiet-button" type="button" onClick={() => { setChangingPassword(true); setMessage(""); }}>Set password</button>}
+    <button className="quiet-button" type="button" onClick={() => supabase.auth.signOut()}><LogOut size={12} />Sign out</button>
+    {message && <small className="account-message">{message}</small>}
+  </div>;
+  if (session) return <button className="quiet-button" type="button" onClick={() => supabase.auth.signOut()}><LogOut size={12} />Not authorized · sign out</button>;
   if (!open) return <button className="quiet-button" type="button" onClick={() => setOpen(true)}><LogIn size={12} />Owner sign in</button>;
-  return <form className="sign-in" onSubmit={sendLink}><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" aria-label="Email address" /><button type="submit">Send link</button>{message && <small>{message}</small>}</form>;
+  return <form className="sign-in password-sign-in" onSubmit={signIn}><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" aria-label="Email address" /><input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" aria-label="Password" /><button type="submit">Sign in</button>{message && <small>{message}</small>}</form>;
 }
 
 export default function App() {
