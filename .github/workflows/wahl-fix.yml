@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      issues: write
       pull-requests: write
 
     steps:
@@ -42,6 +43,28 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Document the request as an issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          POST_ID: ${{ inputs.post_id }}
+          THOUGHT: ${{ inputs.thought }}
+        run: |
+          title="$(printf '%s' "$THOUGHT" | sed -E 's/#[Ff][Ii][Xx]//g' | tr '\n' ' ' | cut -c1-72)"
+          printf '%s\n\n%s\n\n%s\n\n%s\n' \
+            "## Thought from Wahl" \
+            "$THOUGHT" \
+            "Wahl post: $POST_ID" \
+            "Automation request: $REQUEST_ID" > "$RUNNER_TEMP/issue-body.md"
+
+          issue_url="$(gh issue create \
+            --title "[Wahl fix] ${title:-Improve Wahl}" \
+            --body-file "$RUNNER_TEMP/issue-body.md")"
+          issue_number="${issue_url##*/}"
+          echo "url=$issue_url" >> "$GITHUB_OUTPUT"
+          echo "number=$issue_number" >> "$GITHUB_OUTPUT"
 
       - name: Ask Codex to implement the fix
         id: codex
@@ -60,6 +83,7 @@ jobs:
 
             Wahl post ID: ${{ inputs.post_id }}
             Automation request ID: ${{ inputs.request_id }}
+            GitHub issue: #${{ steps.issue.outputs.number }}
 
             Thought:
             ${{ inputs.thought }}
@@ -74,10 +98,11 @@ jobs:
           REQUEST_ID: ${{ inputs.request_id }}
           POST_ID: ${{ inputs.post_id }}
           THOUGHT: ${{ inputs.thought }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           CODEX_SUMMARY: ${{ steps.codex.outputs.final-message }}
         run: |
           if git diff --quiet && test -z "$(git status --short)"; then
-            echo "Codex completed its review but did not find a safe code change to propose."
+            gh issue comment "$ISSUE_NUMBER" --body "Codex completed its review but did not find a safe code change to propose."
             exit 0
           fi
 
@@ -90,7 +115,8 @@ jobs:
           git push --set-upstream origin "$branch"
 
           title="$(printf '%s' "$THOUGHT" | sed -E 's/#[Ff][Ii][Xx]//g' | tr '\n' ' ' | cut -c1-72)"
-          printf '%s\n\n%s\n\n%s\n\n%s\n' \
+          printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n' \
+            "Closes #$ISSUE_NUMBER" \
             "Wahl post: $POST_ID" \
             "## Codex summary" \
             "${CODEX_SUMMARY:-Codex implemented the requested Wahl improvement.}" \
