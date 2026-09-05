@@ -81,7 +81,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Run only finite validation commands inside automation, normally `npm test` and `npm run build`.
 - Never start `npm run dev`, `npm run preview`, a browser, watcher, background task, or any other persistent process inside GitHub Actions.
 - Use ephemeral Codex sessions for automated fixes and ensure every process started by a run exits before Codex returns.
-- Run Codex as a dedicated unprivileged user so its restrictions do not remove network access from later trusted delivery steps. Restore checkout ownership before validation and Git delivery.
+- Run Codex as a dedicated unprivileged user in a shared checkout group so its restrictions do not remove network access from later trusted delivery steps. Keep the runner as the checkout owner for validation and Git delivery.
 - Keep the workflow timeout bounded. A run that has emitted its final Codex response but does not advance is hung and should be cancelled before retrying.
 - Test authorization and policy decisions as isolated logic before changing the deployed Supabase function or database policy.
 - Exercise the complete path in order: authenticated owner request, private eligible post, database queue record, GitHub dispatch, issue creation, finite Codex run, tests/build, review branch, and pull request.
