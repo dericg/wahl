@@ -1,0 +1,28 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const workflow = readFileSync(new URL("../.github/workflows/wahl-fix.yml", import.meta.url), "utf8");
+const callbackFunction = readFileSync(new URL("../supabase/functions/update-wahl-fix/index.ts", import.meta.url), "utf8");
+
+test("workflow reports working and every completion outcome", () => {
+  assert.match(workflow, /status: "working"/);
+  assert.match(workflow, /echo "status=no_change"/);
+  assert.match(workflow, /echo "status=pr_ready"/);
+  assert.match(workflow, /status: "failed"/);
+  assert.match(workflow, /pull_request_url=\$pr_url/);
+  assert.match(workflow, /if: \$\{\{ failure\(\) \}\}/);
+});
+
+test("workflow callback uses only configured secrets for authentication and location", () => {
+  assert.match(workflow, /secrets\.WAHL_STATUS_CALLBACK_TOKEN/);
+  assert.match(workflow, /secrets\.WAHL_SUPABASE_URL/);
+  assert.doesNotMatch(workflow, /VITE_SUPABASE/);
+});
+
+test("callback accepts no browser credentials and limits updates to active requests", () => {
+  assert.doesNotMatch(callbackFunction, /Access-Control-Allow-Origin/);
+  assert.match(callbackFunction, /Deno\.env\.get\("WAHL_STATUS_CALLBACK_TOKEN"\)/);
+  assert.match(callbackFunction, /\.in\("status", \["queued", "working"\]\)/);
+  assert.match(callbackFunction, /crypto\.subtle\.digest/);
+});

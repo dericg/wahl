@@ -39,6 +39,20 @@ jobs:
         with:
           ref: main
 
+      - name: Mark request as working
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
+          SUPABASE_URL: ${{ secrets.WAHL_SUPABASE_URL }}
+        run: |
+          body="$(jq -n --arg requestId "$REQUEST_ID" '{requestId: $requestId, status: "working"}')"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $STATUS_CALLBACK_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "$body" \
+            "$SUPABASE_URL/functions/v1/update-wahl-fix"
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -130,6 +144,7 @@ jobs:
         run: |
           if git diff --quiet && test -z "$(git status --short)"; then
             gh issue comment "$ISSUE_NUMBER" --body "Codex completed its review but did not find a safe code change to propose."
+            echo "status=no_change" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -155,4 +170,43 @@ jobs:
             --title "[Wahl fix] ${title:-Improve Wahl}" \
             --body-file "$RUNNER_TEMP/pr-body.md")"
 
+          echo "status=pr_ready" >> "$GITHUB_OUTPUT"
+          echo "pull_request_url=$pr_url" >> "$GITHUB_OUTPUT"
           echo "Pull request ready for review: $pr_url"
+
+      - name: Record completed request
+        if: ${{ success() }}
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          REQUEST_STATUS: ${{ steps.pr.outputs.status }}
+          PULL_REQUEST_URL: ${{ steps.pr.outputs.pull_request_url }}
+          STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
+          SUPABASE_URL: ${{ secrets.WAHL_SUPABASE_URL }}
+        run: |
+          body="$(jq -n \
+            --arg requestId "$REQUEST_ID" \
+            --arg status "$REQUEST_STATUS" \
+            --arg pullRequestUrl "$PULL_REQUEST_URL" \
+            '{requestId: $requestId, status: $status} + (if $pullRequestUrl == "" then {} else {pullRequestUrl: $pullRequestUrl} end)')"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $STATUS_CALLBACK_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "$body" \
+            "$SUPABASE_URL/functions/v1/update-wahl-fix"
+
+      - name: Record failed request
+        if: ${{ failure() }}
+        continue-on-error: true
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
+          SUPABASE_URL: ${{ secrets.WAHL_SUPABASE_URL }}
+        run: |
+          body="$(jq -n --arg requestId "$REQUEST_ID" '{requestId: $requestId, status: "failed"}')"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $STATUS_CALLBACK_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "$body" \
+            "$SUPABASE_URL/functions/v1/update-wahl-fix"
