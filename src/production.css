@@ -1,0 +1,13 @@
+.post-tools { display: flex; align-items: center !important; gap: 7px !important; }
+.delete-post { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; border: 0; background: transparent; color: #806c52; cursor: pointer; }
+.delete-post:hover { color: #bc6259; }
+.notice, .empty-wall { border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.notice { margin-bottom: 14px; color: #d6b15e; background: var(--brass-soft); }
+.empty-wall { text-align: center; padding: 30px; }
+.owner-access { display: flex; justify-content: center; margin-top: 13px; }
+.quiet-button { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #675640; font-size: 9px; cursor: pointer; }
+.quiet-button:hover { color: var(--muted); }
+.sign-in { display: grid; grid-template-columns: 1fr auto; gap: 6px; width: min(100%, 340px); }
+.sign-in input { min-width: 0; border: 1px solid var(--line); border-radius: 5px; background: #160e09; color: var(--ink); padding: 7px 9px; font-size: 11px; }
+.sign-in button { border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--brass); padding: 7px 10px; font-size: 10px; cursor: pointer; }
+.sign-in small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
