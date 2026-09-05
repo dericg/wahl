@@ -1,4 +1,13 @@
 .post-tools { display: flex; align-items: center !important; gap: 7px !important; }
+.format-controls { display: flex; gap: 4px; margin: 2px 0 6px; }
+.format-controls button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: 5px; color: var(--muted); background: transparent; cursor: pointer; }
+.format-controls button:hover, .format-controls button[aria-pressed="true"] { color: var(--brass); border-color: var(--line); background: var(--brass-soft); }
+.format-controls button:focus-visible, .thought-editor:focus-visible { outline: 1px solid var(--brass); outline-offset: 3px; }
+.format-controls button:disabled { opacity: .42; cursor: default; }
+.thought-editor { min-height: 84px; padding: 4px 0 9px; color: var(--ink); font: 400 16px/1.55 "DM Sans", sans-serif; letter-spacing: .02px; }
+.thought-editor:empty::before, .thought-editor:has(> br:only-child)::before { content: attr(data-placeholder); color: #8e7b61; pointer-events: none; }
+.thought-editor, .post-card > p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.thought-editor[aria-invalid="true"] { outline: 1px solid var(--wine); outline-offset: 3px; }
 .delete-post { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; border: 0; background: transparent; color: #806c52; cursor: pointer; }
 .delete-post:hover { color: #bc6259; }
 .notice, .empty-wall { border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px; color: var(--muted); font-size: 12px; line-height: 1.5; }
