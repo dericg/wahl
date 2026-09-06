@@ -1,0 +1,70 @@
+name: Deploy Wahl test backend
+on:
+  repository_dispatch:
+    types: [wahl_test_deploy]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open Wahl pull request to deploy
+        required: true
+        type: string
+concurrency:
+  group: wahl-test-backend
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: read }
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      sha: ${{ steps.pr.outputs.sha }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_PR: ${{ github.event.client_payload.pr_number || inputs.pull_request_number }}
+          REQUESTED_SHA: ${{ github.event.client_payload.head_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REQUESTED_PR" | grep -Eq '^[1-9][0-9]*$'
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$REQUESTED_PR")"
+          test "$(jq -r '.state' <<< "$pr")" = open
+          test "$(jq -r '.head.repo.full_name' <<< "$pr")" = dericg/wahl
+          sha="$(jq -r '.head.sha' <<< "$pr")"
+          if test -n "$REQUESTED_SHA"; then test "$REQUESTED_SHA" = "$sha"; fi
+          echo "number=$REQUESTED_PR" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with: { ref: "${{ steps.pr.outputs.sha }}" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: test
+    permissions: { contents: read, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ needs.validate.outputs.sha }}" }
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Apply migrations
+        env: { SUPABASE_DB_URL: "${{ secrets.SUPABASE_DB_URL }}" }
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
+      - name: Deploy Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase functions deploy dispatch-wahl-fix --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy update-wahl-fix --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy record-wahl-activity --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+      - name: Comment result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.validate.outputs.number }}
+          SHA: ${{ needs.validate.outputs.sha }}
+        run: gh pr comment "$PR" --body "Automated test-backend deployment succeeded for commit \`$SHA\`. Frontend publication to OpenAI Sites remains a separate trusted Sites step."

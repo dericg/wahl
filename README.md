@@ -41,7 +41,9 @@ For each eligible thought, Wahl creates one `automation_requests` record and dis
 
 The automation record supports `queued`, `working`, `pr_ready`, `no_change`, `failed`, and `closed` states. The wall checks Supabase every ten seconds while work is active, and **View progress** opens the latest status inside Wahl with a manual refresh fallback. A successful run links to its review pull request; a no-change or failed run displays an explicit outcome. If initial dispatch fails, Wahl removes the optimistic sent state from the page and displays the error so the owner can retry. An expired session requires signing in again. Issue-only runs report through GitHub Actions, the issue, and the resulting pull request rather than through Wahl's per-post progress UI.
 
-To run an existing issue, open **Actions → Turn a Wahl thought into a pull request → Run workflow**, enter its number in `issue_number`, and leave `request_id`, `post_id`, and `thought` empty. GitHub restricts manual workflow dispatch to users with write access. The issue must be open and belong to this repository. Its content remains untrusted task input, and the workflow never merges or deploys the result.
+To run an existing issue, open **Actions → Turn a Wahl thought into a pull request → Run workflow**, enter its number in `issue_number`, and leave `request_id`, `post_id`, and `thought` empty. GitHub restricts manual workflow dispatch to users with write access. The issue must be open and belong to this repository. Its content remains untrusted task input, and the Codex job never merges or deploys the result.
+
+When a review pull request is created, the workflow dispatches `deploy-test.yml`. That trusted, serialized workflow revalidates the exact PR commit, applies committed migrations to the owner-approved live Supabase test backend, deploys the Wahl Edge Functions, and comments the result on the pull request. Its credentials live only in the GitHub `test` environment. OpenAI Sites frontend publication remains a separate trusted Sites operation.
 
 ### Automation configuration
 
@@ -53,4 +55,4 @@ The workflow requires these GitHub Actions secrets:
 
 The `dispatch-wahl-fix` Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. The `update-wahl-fix` and `record-wahl-activity` Edge Functions require the same `WAHL_STATUS_CALLBACK_TOKEN` value stored as a Supabase secret. Use a long random value and never expose it to the browser or commit it.
 
-Before enabling callbacks, apply the database migration that adds `no_change`, deploy both Edge Functions, and configure the matching GitHub and Supabase secrets. The automation never merges or deploys automatically.
+Before enabling callbacks, apply the database migration that adds `no_change`, deploy both Edge Functions, and configure the matching GitHub and Supabase secrets. The automation never merges automatically, and production publishing remains separately approved.

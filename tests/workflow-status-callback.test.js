@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const workflow = readFileSync(new URL("../.github/workflows/wahl-fix.yml", import.meta.url), "utf8");
 const callbackFunction = readFileSync(new URL("../supabase/functions/update-wahl-fix/index.ts", import.meta.url), "utf8");
+const testDeployment = readFileSync(new URL("../.github/workflows/deploy-test.yml", import.meta.url), "utf8");
 
 test("workflow reports working and every completion outcome", () => {
   assert.match(workflow, /status: "working"/);
@@ -36,4 +37,11 @@ test("callback accepts no browser credentials and limits updates to active reque
   assert.match(callbackFunction, /Deno\.env\.get\("WAHL_STATUS_CALLBACK_TOKEN"\)/);
   assert.match(callbackFunction, /\.in\("status", \["queued", "working"\]\)/);
   assert.match(callbackFunction, /crypto\.subtle\.digest/);
+});
+
+test("validated pull requests dispatch a serialized test-backend deployment", () => {
+  assert.match(workflow, /event_type=wahl_test_deploy/);
+  assert.match(testDeployment, /group: wahl-test-backend/);
+  assert.match(testDeployment, /supabase db push --db-url/);
+  assert.match(testDeployment, /environment: test/);
 });
