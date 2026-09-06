@@ -55,7 +55,7 @@ Deno.serve(async (request) => {
     try {
       return json(await reviewOrMerge({
         owner: owner === true, userId: user.id, post, automation: existing, input,
-        token: Deno.env.get("WAHL_MERGE_GITHUB_TOKEN"),
+        token: githubToken,
       }));
     } catch (error) {
       const problem = error as Error & { status?: number };

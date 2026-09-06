@@ -34,30 +34,31 @@ export function mergeReadiness({ pull, branch, comparison, runs, number }) {
   return null;
 }
 
-// This path is called only by an authenticated owner action, never by dispatch
-// or a workflow callback. Its token is separate from WAHL_GITHUB_TOKEN.
+// This path is called only by an authenticated owner action. It checks the PR
+// live, then asks a trusted workflow on main to repeat the checks and merge.
 export async function reviewOrMerge({ owner, userId, post, automation, input, token, fetchImpl = fetch }) {
   if (owner !== true || !userId) throw failure("Owner access required.", 403);
   if (!post || post.author_id !== userId || post.audience_type !== "private" || !/#fix\b/i.test(post.text) ||
       !automation || automation.post_id !== post.id) throw failure("An eligible private fix request is required.", 403);
   if (!["review_pull_request", "merge_pull_request"].includes(input.action)) throw failure("Invalid action.", 400);
   const number = pullNumber(automation.pull_request_url);
-  if (!token) throw failure("Merging from Wahl is not configured. Review this pull request on GitHub.", 503);
+  if (!token) throw failure("GitHub review is not configured. Review this pull request on GitHub.", 503);
   const merging = input.action === "merge_pull_request";
   if (merging && (input.reviewed !== true || !shaPattern.test(input.headSha || "") || !shaPattern.test(input.baseSha || ""))) {
     throw failure("Confirm your review of the current commit before merging.", 400);
   }
-  async function github(path, body) {
+  async function github(path, { method = "GET", body } = {}) {
     const response = await fetchImpl(`https://api.github.com/repos/${repository}/${path}`, {
-      method: body ? "PUT" : "GET",
+      method,
       headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`,
         "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Wahl-Owner-Review", "Content-Type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) throw failure(body
-      ? "GitHub did not accept the merge. Refresh and review the pull request on GitHub."
+    if (!response.ok) throw failure(method === "POST"
+      ? "GitHub did not accept the merge request. Refresh and review the pull request on GitHub."
       : "GitHub review details are unavailable. Try again or review on GitHub.", 502);
+    if (response.status === 204) return null;
     return response.json();
   }
   const pull = await github(`pulls/${number}`);
@@ -75,7 +76,9 @@ export async function reviewOrMerge({ owner, userId, post, automation, input, to
   if (!merging) return { review };
   if (reason) throw failure(reason);
   if (input.headSha !== pull.head.sha || input.baseSha !== branch.sha) throw failure("The pull request or main changed. Refresh and review the new commit before merging.");
-  const result = await github(`pulls/${number}/merge`, { sha: input.headSha, merge_method: "squash" });
-  if (result.merged !== true) throw failure("GitHub did not merge the pull request. Refresh its status before trying again.");
-  return { review: { ...review, ready: false, merged: true, message: "Pull request merged. Publishing remains a separate step." } };
+  await github("dispatches", { method: "POST", body: { event_type: "wahl_merge_review", client_payload: {
+    pull_request_number: number, head_sha: input.headSha, base_sha: input.baseSha,
+  } } });
+  return { review: { ...review, ready: false, merged: false,
+    message: "Merge requested. GitHub is rechecking the pull request before merging." } };
 }

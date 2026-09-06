@@ -22,14 +22,14 @@ function context(overrides = {}) {
     input: { action: "review_pull_request" }, token: "server-only-test-token", ...overrides,
   };
 }
-function githubFixture(state = ready(), mergeResult = { merged: true }) {
+function githubFixture(state = ready()) {
   const calls = [];
   return { calls, fetchImpl: async (url, options) => {
     calls.push({ url, ...options });
     assert.ok(url.startsWith("https://api.github.com/repos/dericg/wahl/"));
     assert.equal(options.headers.Authorization, "Bearer server-only-test-token");
     let body;
-    if (options.method === "PUT") body = mergeResult;
+    if (options.method === "POST" && url.endsWith("/dispatches")) return new Response(null, { status: 204 });
     else if (url.endsWith("/pulls/35")) body = state.pull;
     else if (url.endsWith("/commits/main")) body = state.branch;
     else if (url.includes("/compare/")) body = state.comparison;
@@ -96,15 +96,17 @@ test("checking readiness never merges or exposes GitHub credentials", async () =
   assert.equal(JSON.stringify(result).includes("server-only-test-token"), false);
 });
 
-test("explicit review rechecks readiness and merges only the approved head SHA", async () => {
+test("explicit review rechecks readiness and dispatches only the approved commits", async () => {
   const fixture = githubFixture();
   const result = await reviewOrMerge(context({ ...fixture, input: mergeInput }));
-  assert.equal(result.review.merged, true);
+  assert.equal(result.review.merged, false);
   assert.equal(result.review.ready, false);
-  const writes = fixture.calls.filter((call) => call.method === "PUT");
+  const writes = fixture.calls.filter((call) => call.method === "POST");
   assert.equal(writes.length, 1);
-  assert.equal(writes[0].url, "https://api.github.com/repos/dericg/wahl/pulls/35/merge");
-  assert.deepEqual(JSON.parse(writes[0].body), { sha: headSha, merge_method: "squash" });
+  assert.equal(writes[0].url, "https://api.github.com/repos/dericg/wahl/dispatches");
+  assert.deepEqual(JSON.parse(writes[0].body), { event_type: "wahl_merge_review", client_payload: {
+    pull_request_number: 35, head_sha: headSha, base_sha: baseSha,
+  } });
 });
 
 test("changed commits, changed main, and failed checks block a previously reviewed merge", async () => {
@@ -117,16 +119,14 @@ test("changed commits, changed main, and failed checks block a previously review
     const state = ready(); change(state);
     const fixture = githubFixture(state);
     await assert.rejects(reviewOrMerge(context({ ...fixture, input: mergeInput })));
-    assert.equal(fixture.calls.some((call) => call.method === "PUT"), false);
+    assert.equal(fixture.calls.some((call) => call.method === "POST"), false);
   }
 });
 
-test("GitHub errors and refused merges cannot report success", async () => {
+test("GitHub read and dispatch errors cannot report success", async () => {
   await assert.rejects(reviewOrMerge(context({ fetchImpl: async () => new Response("denied", { status: 403 }) })), /unavailable/);
-  const fixture = githubFixture(ready(), { merged: false });
-  await assert.rejects(reviewOrMerge(context({ ...fixture, input: mergeInput })), /did not merge/);
   const conflict = githubFixture();
   await assert.rejects(reviewOrMerge(context({ input: mergeInput, fetchImpl: (url, options) =>
-    options.method === "PUT" ? Promise.resolve(new Response("changed", { status: 409 })) : conflict.fetchImpl(url, options),
-  })), /did not accept/);
+    options.method === "POST" ? Promise.resolve(new Response("denied", { status: 403 })) : conflict.fetchImpl(url, options),
+  })), /did not accept the merge request/);
 });
