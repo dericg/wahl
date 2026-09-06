@@ -13,6 +13,7 @@ function ready() {
     branch: { sha: baseSha }, comparison: { behind_by: 0 },
     runs: { workflow_runs: [{ id: 5, head_sha: headSha, event: "pull_request", path: ".github/workflows/ci.yml",
       repository: repo, pull_requests: [{ number: 35 }], status: "completed", conclusion: "success" }] },
+    statuses: { statuses: [] },
   };
 }
 function context(overrides = {}) {
@@ -34,6 +35,7 @@ function githubFixture(state = ready()) {
     else if (url.endsWith("/commits/main")) body = state.branch;
     else if (url.includes("/compare/")) body = state.comparison;
     else if (url.includes("/actions/workflows/ci.yml/runs?")) body = state.runs;
+    else if (url.endsWith(`/commits/${headSha}/status`)) body = state.statuses;
     else assert.fail(`Unexpected request: ${url}`);
     return new Response(JSON.stringify(body));
   } };
@@ -45,6 +47,17 @@ test("only canonical Wahl PR URLs are accepted", () => {
   for (const url of [null, "https://github.com/other/wahl/pull/35", "https://github.com/dericg/wahl/pull/35/merge",
     "https://github.com/dericg/wahl/pull/35?redirect=1", "https://github.com/dericg/wahl/pull/0",
     "https://github.com/dericg/wahl/pull/9999999999999999999"]) assert.throws(() => pullNumber(url));
+});
+
+test("a successful trusted revision status can replace the suppressed PR workflow run", () => {
+  const state = ready();
+  state.runs = { workflow_runs: [] };
+  state.statuses.statuses.push({ context: "wahl/revision-validation", state: "success" });
+  assert.equal(mergeReadiness(state), null);
+  state.statuses.statuses[0].state = "failure";
+  assert.equal(typeof mergeReadiness(state), "string");
+  state.statuses.statuses[0] = { context: "untrusted/status", state: "success" };
+  assert.equal(typeof mergeReadiness(state), "string");
 });
 
 test("readiness requires an open, current, clean PR and successful Wahl tests/build", () => {

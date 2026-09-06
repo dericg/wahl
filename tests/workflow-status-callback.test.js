@@ -6,6 +6,7 @@ const workflow = readFileSync(new URL("../.github/workflows/wahl-fix.yml", impor
 const callbackFunction = readFileSync(new URL("../supabase/functions/update-wahl-fix/index.ts", import.meta.url), "utf8");
 const testDeployment = readFileSync(new URL("../.github/workflows/deploy-test.yml", import.meta.url), "utf8");
 const reviewedMerge = readFileSync(new URL("../.github/workflows/merge-reviewed-pr.yml", import.meta.url), "utf8");
+const revisePullRequest = readFileSync(new URL("../.github/workflows/revise-wahl-pr.yml", import.meta.url), "utf8");
 const schema = readFileSync(new URL("../database/schema.sql", import.meta.url), "utf8");
 const serviceRoleGrant = readFileSync(new URL("../supabase/migrations/20260906194000_automation_service_role_grants.sql", import.meta.url), "utf8");
 
@@ -75,6 +76,23 @@ test("owner-reviewed merges run in a trusted bounded workflow", () => {
   assert.match(reviewedMerge, /test "\$current_main" = "\$EXPECTED_BASE"/);
   assert.match(reviewedMerge, /\.mergeable_state/);
   assert.match(reviewedMerge, /actions\/workflows\/ci\.yml\/runs/);
+  assert.match(reviewedMerge, /wahl\/revision-validation/);
   assert.match(reviewedMerge, /-f sha="\$EXPECTED_HEAD" -f merge_method=squash/);
   assert.doesNotMatch(reviewedMerge, /secrets\./);
+});
+
+test("owner comments can request a bounded Codex revision of the same pull request", () => {
+  assert.match(revisePullRequest, /issue_comment:/);
+  assert.match(revisePullRequest, /github\.actor == 'dericg'/);
+  assert.match(revisePullRequest, /author_association == 'OWNER'/);
+  assert.match(revisePullRequest, /test "\$first_line" = "\/codex revise"/);
+  assert.match(revisePullRequest, /openai\/codex-action@v1/);
+  assert.match(revisePullRequest, /secrets\.OPENAI_API_KEY/);
+  assert.match(revisePullRequest, /codex\/wahl-fix-/);
+  assert.match(revisePullRequest, /git status --short -- AGENTS\.md \.github\/workflows/);
+  assert.match(revisePullRequest, /npm test/);
+  assert.match(revisePullRequest, /npm run build/);
+  assert.match(revisePullRequest, /wahl\/revision-validation/);
+  assert.match(revisePullRequest, /event_type=wahl_test_deploy/);
+  assert.doesNotMatch(revisePullRequest, /pulls\/\$PR_NUMBER\/merge/);
 });

@@ -29,6 +29,7 @@ jobs:
       actions: read
       contents: write
       pull-requests: write
+      statuses: read
     env:
       PR_NUMBER: ${{ inputs.pull_request_number }}
       EXPECTED_HEAD: ${{ inputs.head_sha }}
@@ -68,8 +69,12 @@ jobs:
               any(.pull_requests[]?; .number == $number)
             )] | sort_by(.id) | last
           ' <<< "$runs")"
-          test "$(jq -r '.status' <<< "$validated")" = completed
-          test "$(jq -r '.conclusion' <<< "$validated")" = success
+          revision_status="$(gh api "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_HEAD/status" --jq \
+            '[.statuses[] | select(.context == "wahl/revision-validation" and .state == "success")] | length')"
+          if ! { test "$(jq -r '.status' <<< "$validated")" = completed &&
+            test "$(jq -r '.conclusion' <<< "$validated")" = success; }; then
+            test "$revision_status" -gt 0
+          fi
 
           result="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
             -f sha="$EXPECTED_HEAD" -f merge_method=squash)"
