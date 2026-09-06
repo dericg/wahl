@@ -69,7 +69,7 @@ Create a GitHub environment named `test` with this exact configuration:
 | Variable | `VITE_SUPABASE_URL` | `https://rzmgyvkvfjbcsxegafko.supabase.co` |
 | Variable | `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Wahl publishable key |
 
-`SUPABASE_DB_URL` is not used by the current workflow. GitHub-hosted runners use Wahl's IPv4-compatible Shared Pooler at `aws-0-us-west-2.pooler.supabase.com:5432`. The workflow safely percent-encodes `SUPABASE_DB_PASSWORD`, constructs the connection URL only in the runner, and calls `supabase db push --db-url "$db_url"`. Do not add `supabase link`: Wahl's access token can deploy functions but does not have the Supabase organization privilege required by that Management API operation.
+`SUPABASE_DB_URL` is not used by the current workflow. GitHub-hosted runners use Wahl's IPv4-compatible Shared Pooler at `aws-0-us-west-2.pooler.supabase.com:5432`. The workflow removes accidental copied line endings, safely percent-encodes `SUPABASE_DB_PASSWORD`, constructs the connection URL only in the runner, and calls `supabase db push --db-url "$db_url"`. Do not add `supabase link`: Wahl's access token can deploy functions but does not have the Supabase organization privilege required by that Management API operation.
 
 To deploy an open pull request for review, open **Actions → Deploy Wahl test backend → Run workflow** and enter the pull-request number. The CLI equivalent is:
 

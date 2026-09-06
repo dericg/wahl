@@ -75,8 +75,9 @@ jobs:
         run: |
           project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
           printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
-          test -n "$SUPABASE_DB_PASSWORD"
-          encoded_password="$(printf '%s' "$SUPABASE_DB_PASSWORD" | jq -sRr @uri)"
+          db_password="$(printf '%s' "$SUPABASE_DB_PASSWORD" | tr -d '\r\n')"
+          test -n "$db_password"
+          encoded_password="$(printf '%s' "$db_password" | jq -sRr @uri)"
           db_url="postgresql://postgres.${project_ref}:${encoded_password}@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
           supabase db push --db-url "$db_url"
       - name: Deploy Edge Functions
