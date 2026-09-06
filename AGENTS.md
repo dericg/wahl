@@ -119,6 +119,18 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Database rollout requires the `repository_activity` table, public select-only RLS, and explicit `select`, `insert`, and `update` grants for `service_role`. Deploy `record-wahl-activity` with JWT verification disabled because it performs its own shared-token authentication.
 - GitHub deployment cards appear only when GitHub records deployment events. Publishing through another service does not imply a GitHub deployment record.
 
+## Versioning and releases
+
+- Use Semantic Versioning (`MAJOR.MINOR.PATCH`) for Wahl. The source of truth is the `version` field in `package.json`; keep the root package version in `package-lock.json` aligned whenever it changes.
+- While Wahl remains below `1.0.0`, increment `MINOR` for new user-visible capabilities, meaningful data-model or workflow behavior, and incompatible behavior changes. Increment `PATCH` for backward-compatible fixes, security improvements, performance work, and maintenance that changes the deployed product.
+- Documentation, tests, refactoring, and CI-only changes do not require their own version bump unless they are included in a release batch that changes the deployed product.
+- Choose one version for each reviewed release batch; do not increment the version for every pull request. The pull request that prepares a production release must state the intended version and summarize the included user-visible changes.
+- Include the version bump in the exact reviewed source that is built and deployed. Run `npm test` and `npm run build` after changing it, and confirm the rendered footer reports the intended version.
+- After a successful production deployment, create a Git tag named `vMAJOR.MINOR.PATCH` on the deployed commit. Never move or reuse a release tag; correct a bad release with a new version.
+- Git commit hashes identify source revisions, and OpenAI Sites version numbers identify hosting artifacts. Neither replaces Wahl's Semantic Version, and a merge alone does not create a release.
+- Publishing remains an explicit owner-approved action. If several merged changes are released together, apply the highest version increment required by any included change.
+- The next production release after adopting this policy should reconcile the already deployed repository-activity and issue-filter capabilities by moving Wahl from `0.1.0` to `0.2.0`.
+
 ## Validation and deployment
 
 Before handing off a code change:
