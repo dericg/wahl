@@ -67,8 +67,10 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Environment variables are `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
 - Keep `.env.example` aligned with any configuration changes.
 - Until a separate production environment is established, treat the OpenAI Sites project configured in `.openai/hosting.json` and its public URL as Wahl's test/review site, not as a production release target.
-- The test/review site currently uses the live Supabase project. Treat its posts, authentication records, automation requests, and repository activity as real shared data even when reviewing an unmerged branch.
-- A validated pull-request branch may be manually published to the test/review site when Deric explicitly requests it. Record the branch and commit being reviewed, verify the deployed URL, and expect later test deployments to replace it.
+- The test/review site currently uses the live Supabase project. Treat its posts, authentication records, automation requests, and repository activity as real shared data even when reviewing an unmerged branch. Do not enable unattended test deployments until the test site uses a separate Supabase project with disposable data and test-only authentication.
+- Once test data and credentials are isolated, every eligible pull-request branch may be automatically published by a trusted deployment workflow after required validation succeeds. Record the pull request, branch, commit, deployment identifier, and review URL on the pull request, and expect later test deployments to replace or supersede earlier ones.
+- Keep generated-code execution and deployment credentials in separate trust boundaries. The Codex job may propose source but must never receive Sites credentials or deploy anything; a trusted downstream job must check out the recorded commit, build it without production secrets, and perform the test deployment.
+- Automatic test deployment is authorized by this policy and does not require separate approval for each eligible pull-request update once the isolated environment and trusted deployment workflow are configured. Fail closed when isolation, commit identity, validation, or deployment credentials cannot be verified.
 - Do not describe a test/review deployment as a production release. A future production environment should use an explicitly designated Sites project and, preferably, a separate Supabase project.
 
 ## Change discipline
@@ -93,7 +95,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Put product-direction changes on hold when they conflict with Wahl's intentionally small, personal character. Record the concern on the pull request and linked issue, then return the decision to Deric; do not close or reject a requested direction on his behalf.
 - Keep an issue open when its pull request is partial, conflicting, unvalidated, or does not satisfy every acceptance criterion. Comment with the current status, the remaining gap, and the next required action.
 - After a merge, verify the pull request state and update or close the linked issue as appropriate. Merging code does not authorize deployment.
-- When Deric requests review on the public test site, validate the pull-request branch first, publish that exact branch commit manually, and add the test URL and commit to the pull request. Test-site approval does not itself authorize merging or a production release.
+- For automatic test review, validate the pull-request branch first, publish that exact branch commit through the trusted deployment workflow, and add the test URL and commit to the pull request. Test-site approval does not itself authorize merging or a production release.
 
 ## Fix automation
 
@@ -114,7 +116,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - API credits are separate from a ChatGPT subscription. After the repository owner restores API billing, rerun the workflow with the existing `issue_number` so the original issue is reused and no duplicate issue is created.
 - Never attempt to purchase credits, change OpenAI billing, rotate `OPENAI_API_KEY`, or expose secret values from automation. Those are owner-controlled recovery steps.
 - A successful pull request ends the automation. Human review is required before merge, and publishing is a separate explicit action.
-- Fix automation must never publish even to the test/review site. An explicitly requested test deployment is performed separately after the workflow has produced a pull request and the proposed branch has passed validation.
+- The Codex fix job must never publish even to the test/review site. After it produces a pull request, a separate trusted workflow may automatically publish the validated commit to the isolated test environment under the environment rules above.
 
 ## Repository activity
 
@@ -150,7 +152,7 @@ Before handing off a code change:
 2. Run `npm run build`.
 3. Check the affected experience locally when interaction or layout changed.
 4. Confirm that no secrets or `.env.local` were added to Git.
-5. If test publishing was explicitly requested, deploy the validated branch's built `dist` output through the existing OpenAI Sites project, verify the test URL, and record the deployed branch and commit on the pull request.
+5. If the isolated automatic test-deployment path is enabled, deploy the validated branch's built `dist` output through the trusted workflow, verify the test URL, and record the pull request, branch, commit, deployment identifier, and URL. Otherwise, test publishing remains an explicitly requested manual action.
 6. If production publishing was explicitly requested after acceptance, build the exact accepted source, deploy it through the designated production project, verify the production URL and rendered version, and create the corresponding immutable release tag.
 
-Do not deploy merely because source files changed. Every test or production publish requires explicit owner authorization, and publishing to the test site does not authorize merging or production release.
+Do not deploy merely because source files changed. Automatic test publishing is allowed only through the configured isolated and trusted path; manual test publishing and every production publish require explicit owner authorization. Publishing to the test site never authorizes merging or production release.
