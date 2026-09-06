@@ -3,6 +3,7 @@ import { ChevronDown, Globe2, Lock, LogIn, LogOut, Trash2 } from "lucide-react";
 import { INITIAL_POSTS } from "./data";
 import { isCloudConfigured, supabase } from "./supabase";
 import ThoughtEditor from "./ThoughtEditor";
+import PullRequestReview from "./PullRequestReview";
 import { draftDetails, FormattedText } from "./formattedText";
 import { fixPresentation, hasActiveFix } from "./fixStatus";
 import { filterWallEntries, mergeActivity, wallEntries } from "./activity";
@@ -139,6 +140,7 @@ function PostCard({ post, now, owner, onDelete, onSendFix, onRefreshFix, fix }) 
             {!previewMode && <button type="button" onClick={refreshProgress} disabled={refreshing || !fix.id}>{refreshing ? "Refreshing…" : "Refresh progress"}</button>}
             {fix.pull_request_url && <a href={fix.pull_request_url} target="_blank" rel="noreferrer">{fix.status === "closed" ? "View pull request" : "Review pull request"}</a>}
           </div>
+          {!previewMode && fix.pull_request_url && fix.status !== "closed" && <PullRequestReview key={fix.pull_request_url} postId={post.id} />}
         </div>}
       </div>}
     </article>

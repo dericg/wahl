@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { validateFixRequest } from "../_shared/wahl-fix-policy.js";
+import { reviewOrMerge } from "../_shared/wahl-merge.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +35,12 @@ Deno.serve(async (request) => {
   const { data: owner, error: ownerError } = await userClient.rpc("is_wahl_owner");
   if (ownerError) return json({ error: "Owner verification failed" }, 500);
 
-  const { postId } = await request.json();
+  let input;
+  try { input = await request.json(); }
+  catch { return json({ error: "Invalid request" }, 400); }
+  if (!input || typeof input !== "object" || Array.isArray(input)) return json({ error: "Invalid request" }, 400);
+  const { postId, action } = input;
+  if (action !== undefined && !["review_pull_request", "merge_pull_request"].includes(action)) return json({ error: "Invalid action" }, 400);
   if (typeof postId !== "string") return json({ error: "A post ID is required" }, 400);
 
   const { data: post, error: postError } = await userClient.from("posts").select("id,author_id,text,audience_type").eq("id", postId).maybeSingle();
@@ -43,7 +49,19 @@ Deno.serve(async (request) => {
   if (policyError) return json({ error: policyError.error }, policyError.status);
   if (!post) return json({ error: "This post is not an eligible private fix request" }, 400);
 
-  const { data: existing } = await userClient.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at").eq("post_id", post.id).maybeSingle();
+  const { data: existing, error: existingError } = await userClient.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at").eq("post_id", post.id).maybeSingle();
+  if (action) {
+    if (existingError) return json({ error: "The linked pull request could not be read" }, 500);
+    try {
+      return json(await reviewOrMerge({
+        owner: owner === true, userId: user.id, post, automation: existing, input,
+        token: githubToken,
+      }));
+    } catch (error) {
+      const problem = error as Error & { status?: number };
+      return json({ error: problem.status ? problem.message : "Pull request status is uncertain. Refresh before trying again." }, problem.status || 502);
+    }
+  }
   if (existing) {
     const branch = `codex/wahl-fix-${existing.id}`;
     const pulls = await fetch(`https://api.github.com/repos/dericg/wahl/pulls?state=all&head=dericg:${encodeURIComponent(branch)}`, {

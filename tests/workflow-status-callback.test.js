@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const workflow = readFileSync(new URL("../.github/workflows/wahl-fix.yml", import.meta.url), "utf8");
 const callbackFunction = readFileSync(new URL("../supabase/functions/update-wahl-fix/index.ts", import.meta.url), "utf8");
 const testDeployment = readFileSync(new URL("../.github/workflows/deploy-test.yml", import.meta.url), "utf8");
+const reviewedMerge = readFileSync(new URL("../.github/workflows/merge-reviewed-pr.yml", import.meta.url), "utf8");
 const schema = readFileSync(new URL("../database/schema.sql", import.meta.url), "utf8");
 const serviceRoleGrant = readFileSync(new URL("../supabase/migrations/20260906194000_automation_service_role_grants.sql", import.meta.url), "utf8");
 
@@ -61,4 +62,19 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
   assert.match(testDeployment, /actions\/deploy-pages@v4/);
   assert.match(testDeployment, /WAHL_BASE_PATH: \/wahl\//);
   assert.match(testDeployment, /gh pr comment "\$PR" --repo "\$GITHUB_REPOSITORY"/);
+});
+
+test("owner-reviewed merges run in a trusted bounded workflow", () => {
+  assert.match(reviewedMerge, /workflow_dispatch:/);
+  assert.match(reviewedMerge, /pull_request_number:/);
+  assert.match(reviewedMerge, /group: wahl-main-merge/);
+  assert.match(reviewedMerge, /timeout-minutes: 5/);
+  assert.match(reviewedMerge, /contents: write/);
+  assert.match(reviewedMerge, /pull-requests: write/);
+  assert.match(reviewedMerge, /actions: read/);
+  assert.match(reviewedMerge, /test "\$current_main" = "\$EXPECTED_BASE"/);
+  assert.match(reviewedMerge, /\.mergeable_state/);
+  assert.match(reviewedMerge, /actions\/workflows\/ci\.yml\/runs/);
+  assert.match(reviewedMerge, /-f sha="\$EXPECTED_HEAD" -f merge_method=squash/);
+  assert.doesNotMatch(reviewedMerge, /secrets\./);
 });

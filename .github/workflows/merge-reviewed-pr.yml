@@ -1,0 +1,76 @@
+name: Merge reviewed Wahl pull request
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Reviewed Wahl pull request number
+        required: true
+        type: string
+      head_sha:
+        description: Exact reviewed pull request commit
+        required: true
+        type: string
+      base_sha:
+        description: Exact reviewed main commit
+        required: true
+        type: string
+
+concurrency:
+  group: wahl-main-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: ${{ github.repository == 'dericg/wahl' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    env:
+      PR_NUMBER: ${{ inputs.pull_request_number }}
+      EXPECTED_HEAD: ${{ inputs.head_sha }}
+      EXPECTED_BASE: ${{ inputs.base_sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Revalidate and merge reviewed pull request
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_NUMBER" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$EXPECTED_HEAD" | grep -Eq '^[a-f0-9]{40}$'
+          printf '%s' "$EXPECTED_BASE" | grep -Eq '^[a-f0-9]{40}$'
+
+          pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          test "$(jq -r '.state' <<< "$pull")" = open
+          test "$(jq -r '.draft' <<< "$pull")" = false
+          test "$(jq -r '.base.repo.full_name' <<< "$pull")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r '.base.ref' <<< "$pull")" = main
+          test "$(jq -r '.head.repo.full_name' <<< "$pull")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r '.head.sha' <<< "$pull")" = "$EXPECTED_HEAD"
+          test "$(jq -r '.base.sha' <<< "$pull")" = "$EXPECTED_BASE"
+          test "$(jq -r '.mergeable' <<< "$pull")" = true
+          test "$(jq -r '.mergeable_state' <<< "$pull")" = clean
+
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          test "$current_main" = "$EXPECTED_BASE"
+          comparison="$(gh api "repos/$GITHUB_REPOSITORY/compare/$EXPECTED_BASE...$EXPECTED_HEAD")"
+          test "$(jq -r '.behind_by' <<< "$comparison")" = 0
+
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$EXPECTED_HEAD&event=pull_request&per_page=100")"
+          validated="$(jq --argjson number "$PR_NUMBER" --arg repo "$GITHUB_REPOSITORY" '
+            [.workflow_runs[] | select(
+              .head_sha == env.EXPECTED_HEAD and
+              .event == "pull_request" and
+              .path == ".github/workflows/ci.yml" and
+              .repository.full_name == $repo and
+              any(.pull_requests[]?; .number == $number)
+            )] | sort_by(.id) | last
+          ' <<< "$runs")"
+          test "$(jq -r '.status' <<< "$validated")" = completed
+          test "$(jq -r '.conclusion' <<< "$validated")" = success
+
+          result="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f sha="$EXPECTED_HEAD" -f merge_method=squash)"
+          test "$(jq -r '.merged' <<< "$result")" = true

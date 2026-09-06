@@ -48,6 +48,10 @@ main { overflow: clip; }
 .fix-progress p { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .fix-progress .fix-updated { font-size: 10px; }
 .fix-progress-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pull-request-review { margin-top: 12px; }
+.merge-review-confirmation { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+.merge-review-confirmation input { flex: none; margin-top: 3px; accent-color: var(--brass); }
+.fix-request .merge-review-confirmation span { color: var(--muted); font-size: 12px; line-height: 1.5; font-weight: 400; letter-spacing: normal; text-transform: none; }
 .fix-request button:focus-visible, .fix-request a:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .activity-card { background: transparent; box-shadow: none; border-color: rgba(81,57,35,.65); }
 .activity-kind { color: #806c52; font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
