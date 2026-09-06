@@ -30,8 +30,11 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - `src/styles.css` — foundational styles
 - `src/production.css` — production visual layer
 - `src/data.js` — representative posts used by local preview mode
+- `src/activity.js` — GitHub event normalization, release fallbacks, and chronological feed merging
 - `src/supabase.js` — Supabase client and configuration detection
 - `database/schema.sql` — tables, constraints, helper function, grants, and row-level security policies
+- `.github/workflows/wahl-activity.yml` — trusted ingestion of repository events into Supabase
+- `supabase/functions/record-wahl-activity/index.ts` — authenticated repository-activity callback
 - `.env.example` — required public environment-variable names
 - `.openai/hosting.json` — Sites deployment configuration; the deployable output is `dist`
 
@@ -41,6 +44,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Preserve the single-page wall unless the requested feature clearly needs another route.
 - Favor thoughtful spacing and plain language over decorative UI or added navigation.
 - Keep authoring controls quiet and secondary to the public reading experience.
+- Keep thoughts and GitHub activity in one reverse-chronological wall feed. Repository events should look like restrained, read-only posts, not a separate dashboard, panel, or navigation destination.
 - Maintain responsive, keyboard-accessible behavior and meaningful labels.
 - Avoid speculative features and new dependencies when browser-native or existing-stack solutions are sufficient.
 
@@ -50,6 +54,8 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Only users registered in `site_owners` may read private posts or modify the wall.
 - Ownership and privacy must be enforced by Supabase row-level security, not only hidden in the UI.
 - Keep post text between 1 and 320 characters and preserve the `private` / `everyone` audience values.
+- Repository activity is public, read-only wall content. Browser clients may select `repository_activity` but must never insert, update, or delete its records.
+- Accept repository activity writes only through the authenticated Edge Function. Validate the shared callback token, bounded event fields, timestamps, event kinds, and `https://github.com/dericg/wahl` URLs before using the service role.
 - When changing data behavior, update both the application code and `database/schema.sql` as needed.
 - Treat the Supabase publishable key as client-safe configuration, but never commit passwords, service-role keys, access tokens, or `.env.local`.
 
@@ -80,7 +86,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Before merging behavior changes, run the relevant tests and `npm run build`. Check interaction and layout changes locally in a browser, including keyboard behavior and a narrow viewport when applicable.
 - Merge isolated, low-risk changes before overlapping feature work. When multiple pull requests touch the same files, merge one at a time and rebase or recreate each remaining change on the updated `main` branch before validation.
 - When pull requests overlap, select the smallest complete implementation. Close superseded pull requests with a comment that links to the chosen replacement; do not combine competing implementations by default.
-- Put product-direction changes on hold when they conflict with Wahl's intentionally small, personal character. Record the concern on the pull request and linked issue before spending work on conflict resolution.
+- Put product-direction changes on hold when they conflict with Wahl's intentionally small, personal character. Record the concern on the pull request and linked issue, then return the decision to Deric; do not close or reject a requested direction on his behalf.
 - Keep an issue open when its pull request is partial, conflicting, unvalidated, or does not satisfy every acceptance criterion. Comment with the current status, the remaining gap, and the next required action.
 - After a merge, verify the pull request state and update or close the linked issue as appropriate. Merging code does not authorize deployment.
 
@@ -101,6 +107,29 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - API credits are separate from a ChatGPT subscription. After the repository owner restores API billing, rerun the workflow with the existing `issue_number` so the original issue is reused and no duplicate issue is created.
 - Never attempt to purchase credits, change OpenAI billing, rotate `OPENAI_API_KEY`, or expose secret values from automation. Those are owner-controlled recovery steps.
 - A successful pull request ends the automation. Human review is required before merge, and publishing is a separate explicit action.
+
+## Repository activity
+
+- Record commits on `main`, issue lifecycle events, pull-request lifecycle events, GitHub deployment statuses, and selected workflow results as wall events.
+- Keep events and thoughts in one feed ordered by their actual occurrence timestamps, newest first. Do not split repository activity into a separate module or intermix it with private-post authorization rules.
+- Treat GitHub event titles and payload fields as untrusted input. Normalize and bound them before sending, validate again in the Edge Function, and render summaries as escaped React text.
+- Never expose a GitHub token, Supabase service-role key, or `WAHL_STATUS_CALLBACK_TOKEN` to browser code. GitHub Actions sends normalized events to the server-only callback using the existing shared secret.
+- Keep the public feed resilient: recent build commits may serve as a fallback when live Supabase activity is unavailable, and failures loading activity must not hide thoughts.
+- Use stable source IDs and upserts so workflow retries do not duplicate events. Run the activity workflow manually after first rollout to seed recent history; subsequent supported events synchronize automatically.
+- Database rollout requires the `repository_activity` table, public select-only RLS, and explicit `select`, `insert`, and `update` grants for `service_role`. Deploy `record-wahl-activity` with JWT verification disabled because it performs its own shared-token authentication.
+- GitHub deployment cards appear only when GitHub records deployment events. Publishing through another service does not imply a GitHub deployment record.
+
+## Versioning and releases
+
+- Use Semantic Versioning (`MAJOR.MINOR.PATCH`) for Wahl. The source of truth is the `version` field in `package.json`; keep the root package version in `package-lock.json` aligned whenever it changes.
+- While Wahl remains below `1.0.0`, increment `MINOR` for new user-visible capabilities, meaningful data-model or workflow behavior, and incompatible behavior changes. Increment `PATCH` for backward-compatible fixes, security improvements, performance work, and maintenance that changes the deployed product.
+- Documentation, tests, refactoring, and CI-only changes do not require their own version bump unless they are included in a release batch that changes the deployed product.
+- Choose one version for each reviewed release batch; do not increment the version for every pull request. The pull request that prepares a production release must state the intended version and summarize the included user-visible changes.
+- Include the version bump in the exact reviewed source that is built and deployed. Run `npm test` and `npm run build` after changing it, and confirm the rendered footer reports the intended version.
+- After a successful production deployment, create a Git tag named `vMAJOR.MINOR.PATCH` on the deployed commit. Never move or reuse a release tag; correct a bad release with a new version.
+- Git commit hashes identify source revisions, and OpenAI Sites version numbers identify hosting artifacts. Neither replaces Wahl's Semantic Version, and a merge alone does not create a release.
+- Publishing remains an explicit owner-approved action. If several merged changes are released together, apply the highest version increment required by any included change.
+- The next production release after adopting this policy should reconcile the already deployed repository-activity and issue-filter capabilities by moving Wahl from `0.1.0` to `0.2.0`.
 
 ## Validation and deployment
 
