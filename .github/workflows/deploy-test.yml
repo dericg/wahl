@@ -111,4 +111,4 @@ jobs:
           SHA: ${{ needs.validate.outputs.sha }}
           PAGE_URL: ${{ steps.pages.outputs.page_url }}
         run: |
-          gh pr comment "$PR" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
