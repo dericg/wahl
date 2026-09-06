@@ -66,9 +66,11 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - A production build without Supabase variables is intentionally read-only.
 - Environment variables are `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
 - Keep `.env.example` aligned with any configuration changes.
-- Until a separate production environment is established, treat the OpenAI Sites project configured in `.openai/hosting.json` and its public URL as Wahl's test/review site, not as a production release target.
-- The test/review site currently uses the live Supabase project. Treat its posts, authentication records, automation requests, and repository activity as real shared data even when reviewing an unmerged branch.
-- A validated pull-request branch may be manually published to the test/review site when Deric explicitly requests it. Record the branch and commit being reviewed, verify the deployed URL, and expect later test deployments to replace it.
+- Treat the automatically published GitHub Pages URL as Wahl's test/review site. Keep the OpenAI Sites project configured in `.openai/hosting.json` as the separately approved production publishing path.
+- The test/review site uses the live Supabase project by explicit owner decision. Automated test rollouts may change real shared data before merge. Require transactional, idempotent, forward-compatible migrations, serialize database deployments, and never modify personal thoughts as cleanup.
+- Every eligible pull-request branch may automatically deploy its migrations and Edge Functions through the trusted test workflow after validation succeeds, then publish the same validated commit to GitHub Pages. Record the exact commit and review URL on the pull request.
+- Keep generated-code execution and deployment credentials in separate trust boundaries. The Codex job may propose source but must never receive Sites credentials or deploy anything; a trusted downstream job must check out the recorded commit, build it without production secrets, and perform the test deployment.
+- Automatic test-backend deployment is authorized by this policy and does not require separate approval for each eligible pull-request update once the trusted workflow is configured. Fail closed when commit identity, validation, or deployment credentials cannot be verified.
 - Do not describe a test/review deployment as a production release. A future production environment should use an explicitly designated Sites project and, preferably, a separate Supabase project.
 
 ## Change discipline
@@ -93,7 +95,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Put product-direction changes on hold when they conflict with Wahl's intentionally small, personal character. Record the concern on the pull request and linked issue, then return the decision to Deric; do not close or reject a requested direction on his behalf.
 - Keep an issue open when its pull request is partial, conflicting, unvalidated, or does not satisfy every acceptance criterion. Comment with the current status, the remaining gap, and the next required action.
 - After a merge, verify the pull request state and update or close the linked issue as appropriate. Merging code does not authorize deployment.
-- When Deric requests review on the public test site, validate the pull-request branch first, publish that exact branch commit manually, and add the test URL and commit to the pull request. Test-site approval does not itself authorize merging or a production release.
+- For automatic test review, validate the pull-request branch first, publish that exact branch commit through the trusted deployment workflow, and add the test URL and commit to the pull request. Test-site approval does not itself authorize merging or a production release.
 
 ## Fix automation
 
@@ -114,7 +116,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - API credits are separate from a ChatGPT subscription. After the repository owner restores API billing, rerun the workflow with the existing `issue_number` so the original issue is reused and no duplicate issue is created.
 - Never attempt to purchase credits, change OpenAI billing, rotate `OPENAI_API_KEY`, or expose secret values from automation. Those are owner-controlled recovery steps.
 - A successful pull request ends the automation. Human review is required before merge, and publishing is a separate explicit action.
-- Fix automation must never publish even to the test/review site. An explicitly requested test deployment is performed separately after the workflow has produced a pull request and the proposed branch has passed validation.
+- The Codex fix job must never publish even to the test/review site. After it produces a pull request, a separate trusted workflow may automatically publish the validated commit to the isolated test environment under the environment rules above.
 
 ## Repository activity
 
@@ -144,13 +146,23 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 
 ## Validation and deployment
 
+### Test-deployment runbook
+
+- Configure the GitHub environment named `test` exactly once. Store `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` as environment **secrets**. Store `SUPABASE_PROJECT_REF`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY` as environment **variables**. The Wahl project reference is `rzmgyvkvfjbcsxegafko`. Never substitute `SUPABASE_DB_URL` for the database password.
+- `SUPABASE_DB_PASSWORD` is the database password from Supabase **Connect → Shared pooler**, not the Supabase account password, API access token, publishable key, or service-role key. If it is reset, update this one GitHub environment secret. The workflow removes accidental carriage returns/newlines introduced by copying before percent-encoding the password.
+- GitHub-hosted runners are IPv4-only for this path, while Supabase's direct database hostname is IPv6 by default. This project's access token can deploy functions but cannot call the Management API required by `supabase link`. For migrations, percent-encode `SUPABASE_DB_PASSWORD`, construct the Wahl Shared Pooler URL with host `aws-0-us-west-2.pooler.supabase.com`, transaction-pooler port `6543`, and user `postgres.rzmgyvkvfjbcsxegafko`, then run `supabase db push --db-url "$db_url"`. Port `6543` was directly verified with `psql`; this project's session pooler on `5432` rejected the same valid password. Do not use the direct hostname or add `supabase link` unless the token's organization role is deliberately upgraded.
+- Deploy an open review pull request from **Actions → Deploy Wahl test backend → Run workflow**, or run `gh workflow run deploy-test.yml --repo dericg/wahl --ref main -f pull_request_number=<PR>`. The workflow validates the open PR and exact head commit, runs tests/build, applies migrations, deploys Edge Functions, publishes GitHub Pages, and comments the URL on the PR.
+- On failure, inspect the failed step before changing credentials: `RAW_SUPABASE_PROJECT_REF` empty means the workflow used the wrong GitHub variable context or the variable is missing; `IPv6 is not supported` means the workflow used the direct endpoint instead of the Shared Pooler; an authorization failure from `supabase link` means the forbidden link step was reintroduced; password/SASL authentication on port `6543` means `SUPABASE_DB_PASSWORD` is wrong or stale. A password failure only on port `5432` is a session-pooler problem and must not trigger another password reset. Fix only the identified cause, then rerun the same PR number. Do not create a duplicate issue or PR.
+- Never rename a committed migration version after it has been applied. The filename's leading timestamp must exactly match `supabase_migrations.schema_migrations`; changing or rounding it causes `Remote migration versions not found`. Wahl's first recorded versions are `20260905053925` (`automation_requests`) and `20260905062255` (`owner_queues_automation`). Reconcile a mismatch by restoring the matching repository filenames after verifying their origin; do not blindly mark applied migrations reverted.
+- A successful test deployment must complete `validate`, `deploy`, and `deploy-pages`. If migrations fail, Edge Functions and Pages are intentionally skipped; the changes are not available for browser review yet.
+
 Before handing off a code change:
 
 1. Run `npm test` when behavior or automation logic changed.
 2. Run `npm run build`.
 3. Check the affected experience locally when interaction or layout changed.
 4. Confirm that no secrets or `.env.local` were added to Git.
-5. If test publishing was explicitly requested, deploy the validated branch's built `dist` output through the existing OpenAI Sites project, verify the test URL, and record the deployed branch and commit on the pull request.
+5. If the isolated automatic test-deployment path is enabled, deploy the validated branch's built `dist` output through the trusted workflow, verify the test URL, and record the pull request, branch, commit, deployment identifier, and URL. Otherwise, test publishing remains an explicitly requested manual action.
 6. If production publishing was explicitly requested after acceptance, build the exact accepted source, deploy it through the designated production project, verify the production URL and rendered version, and create the corresponding immutable release tag.
 
-Do not deploy merely because source files changed. Every test or production publish requires explicit owner authorization, and publishing to the test site does not authorize merging or production release.
+Do not deploy merely because source files changed. Automatic test publishing is allowed only through the configured isolated and trusted path; manual test publishing and every production publish require explicit owner authorization. Publishing to the test site never authorizes merging or production release.

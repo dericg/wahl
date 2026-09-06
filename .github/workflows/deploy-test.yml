@@ -1,0 +1,114 @@
+name: Deploy Wahl test backend
+on:
+  repository_dispatch:
+    types: [wahl_test_deploy]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open Wahl pull request to deploy
+        required: true
+        type: string
+concurrency:
+  group: wahl-test-backend
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: test
+    permissions: { contents: read, pull-requests: read }
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      sha: ${{ steps.pr.outputs.sha }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_PR: ${{ github.event.client_payload.pr_number || inputs.pull_request_number }}
+          REQUESTED_SHA: ${{ github.event.client_payload.head_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REQUESTED_PR" | grep -Eq '^[1-9][0-9]*$'
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$REQUESTED_PR")"
+          test "$(jq -r '.state' <<< "$pr")" = open
+          test "$(jq -r '.head.repo.full_name' <<< "$pr")" = dericg/wahl
+          sha="$(jq -r '.head.sha' <<< "$pr")"
+          if test -n "$REQUESTED_SHA"; then test "$REQUESTED_SHA" = "$sha"; fi
+          echo "number=$REQUESTED_PR" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with: { ref: "${{ steps.pr.outputs.sha }}" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - name: Normalize public test configuration
+        id: public
+        env:
+          URL_VALUE: ${{ vars.VITE_SUPABASE_URL }}
+          KEY_VALUE: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          echo "url=$(printf '%s' "$URL_VALUE" | tr -d '\r\n')" >> "$GITHUB_OUTPUT"
+          echo "key=$(printf '%s' "$KEY_VALUE" | tr -d '\r\n')" >> "$GITHUB_OUTPUT"
+      - name: Build GitHub Pages artifact
+        env:
+          WAHL_BASE_PATH: /wahl/
+          VITE_SUPABASE_URL: ${{ steps.public.outputs.url }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ steps.public.outputs.key }}
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: test
+    permissions: { contents: read, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ needs.validate.outputs.sha }}" }
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Apply migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          RAW_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
+          printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
+          db_password="$(printf '%s' "$SUPABASE_DB_PASSWORD" | tr -d '\r\n')"
+          test -n "$db_password"
+          encoded_password="$(printf '%s' "$db_password" | jq -sRr @uri)"
+          db_url="postgresql://postgres.${project_ref}:${encoded_password}@aws-0-us-west-2.pooler.supabase.com:6543/postgres"
+          supabase db push --db-url "$db_url"
+      - name: Deploy Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RAW_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
+          printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
+          supabase functions deploy dispatch-wahl-fix --project-ref "$project_ref" --no-verify-jwt
+          supabase functions deploy update-wahl-fix --project-ref "$project_ref" --no-verify-jwt
+          supabase functions deploy record-wahl-activity --project-ref "$project_ref" --no-verify-jwt
+  deploy-pages:
+    needs: [validate, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: pages
+        uses: actions/deploy-pages@v4
+      - name: Comment result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.validate.outputs.number }}
+          SHA: ${{ needs.validate.outputs.sha }}
+          PAGE_URL: ${{ steps.pages.outputs.page_url }}
+        run: |
+          gh pr comment "$PR" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
