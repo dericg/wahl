@@ -1,3 +1,6 @@
+import { normalizeActivity, publicWorkflow } from "../supabase/functions/_shared/wahl-activity-policy.js";
+import { timestampKey } from "./feed.js";
+
 const repositoryUrl = "https://github.com/dericg/wahl";
 
 function bounded(value) {
@@ -22,24 +25,34 @@ export function releaseActivity(commits = []) {
 }
 
 export function mergeActivity(remote = [], fallbackCommits = []) {
-  const entries = [...remote, ...releaseActivity(fallbackCommits)];
-  return [...new Map(entries.map((entry) => [`${entry.kind}\u0000${entry.summary}\u0000${entry.url}\u0000${entry.occurred_at}`, entry])).values()]
-    .filter((entry) => validDate(entry.occurred_at))
-    .sort((left, right) => Date.parse(right.occurred_at) - Date.parse(left.occurred_at));
+  const entries = [...remote, ...releaseActivity(fallbackCommits)]
+    .filter((entry) => validDate(entry.occurred_at) && (entry.kind !== "Workflow" || publicWorkflow(entry.summary)));
+  const byIdentity = new Map();
+  for (const entry of entries) {
+    const identity = entry.kind === "Workflow" ? entry.url.replace(/\/attempts\/\d+$/, "")
+      : `${entry.kind}\u0000${entry.url}\u0000${timestampKey(entry.occurred_at)}`;
+    const previous = byIdentity.get(identity);
+    if (!previous || timestampKey(entry.occurred_at) >= timestampKey(previous.occurred_at)) byIdentity.set(identity, entry);
+  }
+  return [...byIdentity.values()].sort((left, right) => timestampKey(right.occurred_at).localeCompare(timestampKey(left.occurred_at)));
 }
 
 export function wallEntries(posts = [], activity = []) {
   return [
     ...posts.map((post) => ({ ...post, entry_type: "thought" })),
     ...activity.map((entry) => ({ ...entry, id: `github:${entry.source_id}`, created_at: entry.occurred_at, entry_type: "activity" })),
-  ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at) || String(left.id).localeCompare(String(right.id)));
+  ].sort((left, right) => timestampKey(right.created_at).localeCompare(timestampKey(left.created_at)) || String(left.id).localeCompare(String(right.id)));
 }
 
 export function filterWallEntries(entries, filter) {
   if (filter === "issues") {
-    const issues = entries.filter((entry) => entry.entry_type === "activity" && entry.kind === "Issue");
+    const issues = entries.filter((entry) => entry.entry_type === "activity" && entry.kind === "Issue")
+      .sort((left, right) => timestampKey(right.created_at).localeCompare(timestampKey(left.created_at)) || String(right.source_id).localeCompare(String(left.source_id)));
     const byIssue = new Map();
-    for (const entry of issues) if (!byIssue.has(entry.url)) byIssue.set(entry.url, entry);
+    for (const entry of issues) {
+      const identity = entry.url.replace(/[?#].*$/, "").replace(/\/$/, "");
+      if (!byIssue.has(identity)) byIssue.set(identity, entry);
+    }
     return [...byIssue.values()];
   }
   return entries;
@@ -61,7 +74,7 @@ export function activityPayloads(eventName, payload) {
 
   if (eventName === "issues") {
     const issue = payload.issue;
-    return [{ sourceId: `issue:${issue.number}:${payload.action}:${issue.updated_at}`, kind: "Issue", summary: bounded(`${payload.action} #${issue.number} · ${issue.title}`), url: issue.html_url, occurredAt: issue.updated_at }];
+    return [normalizeActivity({ sourceId: `issue:${issue.number}:${payload.action}:${issue.updated_at}`, kind: "Issue", summary: bounded(`${issue.state || (payload.action === "closed" ? "closed" : "open")} #${issue.number} · ${issue.title}`), url: issue.html_url, occurredAt: issue.updated_at })];
   }
 
   if (eventName === "pull_request") {
@@ -78,7 +91,9 @@ export function activityPayloads(eventName, payload) {
 
   if (eventName === "workflow_run") {
     const run = payload.workflow_run;
-    return [{ sourceId: `workflow:${run.id}:${run.run_attempt || 1}`, kind: "Workflow", summary: `${run.name} · ${run.conclusion || run.status}`, url: run.html_url, occurredAt: run.updated_at }];
+    if (run.status && run.status !== "completed") return [];
+    const entry = normalizeActivity({ sourceId: `workflow:${run.id}`, kind: "Workflow", summary: `${run.name} · ${run.conclusion || run.status}`, url: run.html_url, occurredAt: run.updated_at });
+    return entry ? [entry] : [];
   }
 
   return [];
@@ -86,9 +101,9 @@ export function activityPayloads(eventName, payload) {
 
 export function snapshotActivity({ commits = [], issues = [], pulls = [], deployments = [], runs = [] } = {}) {
   const commitEntries = commits.map((commit) => ({ sourceId: `commit:${commit.sha}`, kind: "Commit", summary: bounded(String(commit.commit?.message || "Repository update").split("\n")[0]), url: commit.html_url, occurredAt: commit.commit?.committer?.date }));
-  const issueEntries = issues.filter((issue) => !issue.pull_request).map((issue) => ({ sourceId: `issue:${issue.number}:${issue.state === "closed" ? "closed" : "opened"}:${issue.updated_at}`, kind: "Issue", summary: bounded(`${issue.state} #${issue.number} · ${issue.title}`), url: issue.html_url, occurredAt: issue.updated_at }));
+  const issueEntries = issues.filter((issue) => !issue.pull_request).map((issue) => normalizeActivity({ sourceId: `issue:${issue.number}:${issue.state === "closed" ? "closed" : "opened"}:${issue.updated_at}`, kind: "Issue", summary: bounded(`${issue.state} #${issue.number} · ${issue.title}`), url: issue.html_url, occurredAt: issue.updated_at }));
   const pullEntries = pulls.map((pull) => ({ sourceId: `pr:${pull.number}:snapshot:${pull.updated_at}`, kind: "Pull request", summary: bounded(`${pull.merged_at ? "merged" : pull.state} #${pull.number} · ${pull.title}`), url: pull.html_url, occurredAt: pull.merged_at || pull.updated_at }));
   const deploymentEntries = deployments.map((deployment) => ({ sourceId: `deployment:${deployment.id}:snapshot`, kind: "Deployment", summary: `${deployment.environment || "Production"} · requested`, url: `${repositoryUrl}/deployments`, occurredAt: deployment.created_at }));
-  const workflowEntries = runs.map((run) => ({ sourceId: `workflow:${run.id}:${run.run_attempt || 1}`, kind: "Workflow", summary: `${run.name} · ${run.conclusion || run.status}`, url: run.html_url, occurredAt: run.updated_at }));
+  const workflowEntries = runs.flatMap((run) => activityPayloads("workflow_run", { repository: { full_name: "dericg/wahl" }, workflow_run: run }));
   return [...commitEntries, ...issueEntries, ...pullEntries, ...deploymentEntries, ...workflowEntries];
 }

@@ -15,9 +15,15 @@ Without Supabase environment variables, the development server runs as an intera
 
 ## Repository activity
 
-Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. The feed filter can show all entries or only GitHub issue events. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.
+Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. All keeps lifecycle events in chronological order. GitHub issues shows one entry per issue in its newest loaded state, with a count of distinct issues loaded. The wall initially displays up to 20 combined entries; Load older extends the same feed. Counts describe loaded entries, not repository totals. Every card shows relative age and the exact local time, and relative ages refresh while the wall is open. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.
 
 GitHub Actions sends normalized event summaries to the authenticated `record-wahl-activity` Edge Function. The function validates the shared callback token and Wahl-only GitHub URLs before writing to `repository_activity`. Public visitors may read these events, but browser clients cannot insert or modify them. Run the activity workflow manually once after rollout to seed recent history; later events arrive automatically.
+
+For the feed integrity update, apply `supabase/migrations/20260906120000_feed_integrity.sql` (also recorded in `database/schema.sql`) before deploying the updated recorder and app. The idempotent migration removes recorder/unfinished workflow noise, reconciles workflow attempts and duplicate issue snapshots, and guards against older callbacks overwriting newer outcomes. Only completed outcomes from Validate Wahl and Turn a Wahl thought into a pull request are retained. The existing manual activity workflow backfills all historical issues; repeating it reuses update identities. No workflow file changes are required.
+
+Pagination uses timestamp and ID cursors for each source, preserves timestamp precision, and only advances over consumed rows. A failed older-page read preserves both cursors for retry. If the first activity read fails, the session uses the build's recent commits so thoughts remain available; reload to retry live activity. Newly arriving or updated events above the loaded cursors appear on reload.
+
+Before merging, manually check desktop and narrow layouts, keyboard and touch access to timestamps and Load older, and owner/public sign-in transitions. Browser checks and live database changes are intentionally excluded from fix automation.
 
 ## Production setup
 

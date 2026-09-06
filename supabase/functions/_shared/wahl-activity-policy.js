@@ -2,6 +2,24 @@ const kinds = new Set(["Commit", "Issue", "Pull request", "Deployment", "Workflo
 const sourceId = /^[A-Za-z0-9:._-]{1,160}$/;
 const repositoryUrl = /^https:\/\/github\.com\/dericg\/wahl(?:\/|$)/;
 
+export function publicWorkflow(summary) {
+  return /^(Validate Wahl|Turn a Wahl thought into a pull request) · (success|failure|cancelled|timed_out|action_required|startup_failure)$/.test(summary);
+}
+
+// Stable identities also cover historical snapshots and older workflow senders.
+export function normalizeActivity(payload) {
+  if (payload.kind === "Workflow") {
+    const run = payload.url.match(/^https:\/\/github\.com\/dericg\/wahl\/actions\/runs\/(\d+)(?:\/attempts\/\d+)?$/);
+    if (!run || !publicWorkflow(payload.summary.trim())) return null;
+    return { ...payload, sourceId: `workflow:${run[1]}`, url: `https://github.com/dericg/wahl/actions/runs/${run[1]}` };
+  }
+  if (payload.kind === "Issue") {
+    const issue = payload.url.match(/^https:\/\/github\.com\/dericg\/wahl\/issues\/(\d+)\/?$/);
+    if (issue) return { ...payload, sourceId: `issue:${issue[1]}:${new Date(payload.occurredAt).toISOString()}`, url: `https://github.com/dericg/wahl/issues/${issue[1]}` };
+  }
+  return payload;
+}
+
 export function validateActivity(payload) {
   if (typeof payload.sourceId !== "string" || !sourceId.test(payload.sourceId)) return "A valid source ID is required";
   if (!kinds.has(payload.kind)) return "Unsupported activity kind";

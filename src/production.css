@@ -57,4 +57,13 @@
 .feed-filters button:hover { color: var(--muted); }
 .feed-filters button.selected { border-color: var(--line); background: var(--brass-soft); color: var(--brass); }
 .feed-filters button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.post-header { align-items: flex-start; flex-wrap: wrap; }
+.post-header > div:first-child { flex-wrap: wrap; }
+.post-header .card-time { display: flex; flex-direction: column; gap: 3px; white-space: normal; line-height: 1.4; }
+.card-time .exact-time { font-size: 10px; }
+.load-older { align-self: center; min-height: 44px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 99px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.load-older:hover { color: var(--ink); }
+.load-older[aria-disabled="true"] { opacity: .6; cursor: default; }
+.load-older:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.feed-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media(max-width:520px){.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}
