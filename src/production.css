@@ -13,6 +13,8 @@
 .notice, .empty-wall { border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .notice { margin-bottom: 14px; color: #d6b15e; background: var(--brass-soft); }
 .empty-wall { text-align: center; padding: 30px; }
+.site-header { position: sticky; top: 0; z-index: 10; padding-top: 1px; background: rgba(19, 12, 8, .96); box-shadow: 0 12px 20px rgba(14, 9, 6, .92); }
+main { overflow: clip; }
 .header-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px; margin-bottom: 24px; color: var(--muted); font-size: 10px; }
 .header-controls button:focus-visible, .header-controls input:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .owner-access { display: flex; justify-content: flex-end; min-width: 0; }
