@@ -44,7 +44,7 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
   assert.match(testDeployment, /group: wahl-test-backend/);
   assert.match(testDeployment, /SUPABASE_DB_PASSWORD: \$\{\{ secrets\.SUPABASE_DB_PASSWORD \}\}/);
   assert.match(testDeployment, /jq -sRr @uri/);
-  assert.match(testDeployment, /aws-0-us-west-2\.pooler\.supabase\.com:5432/);
+  assert.match(testDeployment, /aws-0-us-west-2\.pooler\.supabase\.com:6543/);
   assert.match(testDeployment, /supabase db push --db-url "\$db_url"/);
   assert.doesNotMatch(testDeployment, /supabase link/);
   assert.doesNotMatch(testDeployment, /SUPABASE_DB_URL/);
