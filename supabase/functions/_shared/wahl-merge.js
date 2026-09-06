@@ -76,9 +76,9 @@ export async function reviewOrMerge({ owner, userId, post, automation, input, to
   if (!merging) return { review };
   if (reason) throw failure(reason);
   if (input.headSha !== pull.head.sha || input.baseSha !== branch.sha) throw failure("The pull request or main changed. Refresh and review the new commit before merging.");
-  await github("dispatches", { method: "POST", body: { event_type: "wahl_merge_review", client_payload: {
-    pull_request_number: number, head_sha: input.headSha, base_sha: input.baseSha,
-  } } });
+  await github("actions/workflows/merge-reviewed-pr.yml/dispatches", { method: "POST", body: {
+    ref: "main", inputs: { pull_request_number: String(number), head_sha: input.headSha, base_sha: input.baseSha },
+  } });
   return { review: { ...review, ready: false, merged: false,
     message: "Merge requested. GitHub is rechecking the pull request before merging." } };
 }

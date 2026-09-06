@@ -65,7 +65,8 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
 });
 
 test("owner-reviewed merges run in a trusted bounded workflow", () => {
-  assert.match(reviewedMerge, /types: \[wahl_merge_review\]/);
+  assert.match(reviewedMerge, /workflow_dispatch:/);
+  assert.match(reviewedMerge, /pull_request_number:/);
   assert.match(reviewedMerge, /group: wahl-main-merge/);
   assert.match(reviewedMerge, /timeout-minutes: 5/);
   assert.match(reviewedMerge, /contents: write/);

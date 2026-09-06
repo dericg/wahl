@@ -29,7 +29,7 @@ function githubFixture(state = ready()) {
     assert.ok(url.startsWith("https://api.github.com/repos/dericg/wahl/"));
     assert.equal(options.headers.Authorization, "Bearer server-only-test-token");
     let body;
-    if (options.method === "POST" && url.endsWith("/dispatches")) return new Response(null, { status: 204 });
+    if (options.method === "POST" && url.endsWith("/actions/workflows/merge-reviewed-pr.yml/dispatches")) return new Response(null, { status: 204 });
     else if (url.endsWith("/pulls/35")) body = state.pull;
     else if (url.endsWith("/commits/main")) body = state.branch;
     else if (url.includes("/compare/")) body = state.comparison;
@@ -103,9 +103,9 @@ test("explicit review rechecks readiness and dispatches only the approved commit
   assert.equal(result.review.ready, false);
   const writes = fixture.calls.filter((call) => call.method === "POST");
   assert.equal(writes.length, 1);
-  assert.equal(writes[0].url, "https://api.github.com/repos/dericg/wahl/dispatches");
-  assert.deepEqual(JSON.parse(writes[0].body), { event_type: "wahl_merge_review", client_payload: {
-    pull_request_number: 35, head_sha: headSha, base_sha: baseSha,
+  assert.equal(writes[0].url, "https://api.github.com/repos/dericg/wahl/actions/workflows/merge-reviewed-pr.yml/dispatches");
+  assert.deepEqual(JSON.parse(writes[0].body), { ref: "main", inputs: {
+    pull_request_number: "35", head_sha: headSha, base_sha: baseSha,
   } });
 });
 

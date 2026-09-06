@@ -1,8 +1,20 @@
 name: Merge reviewed Wahl pull request
 
 on:
-  repository_dispatch:
-    types: [wahl_merge_review]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Reviewed Wahl pull request number
+        required: true
+        type: string
+      head_sha:
+        description: Exact reviewed pull request commit
+        required: true
+        type: string
+      base_sha:
+        description: Exact reviewed main commit
+        required: true
+        type: string
 
 concurrency:
   group: wahl-main-merge
@@ -18,9 +30,9 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      PR_NUMBER: ${{ github.event.client_payload.pull_request_number }}
-      EXPECTED_HEAD: ${{ github.event.client_payload.head_sha }}
-      EXPECTED_BASE: ${{ github.event.client_payload.base_sha }}
+      PR_NUMBER: ${{ inputs.pull_request_number }}
+      EXPECTED_HEAD: ${{ inputs.head_sha }}
+      EXPECTED_BASE: ${{ inputs.base_sha }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Revalidate and merge reviewed pull request
