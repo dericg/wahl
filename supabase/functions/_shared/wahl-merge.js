@@ -12,7 +12,7 @@ export function pullNumber(url) {
   return number;
 }
 
-export function mergeReadiness({ pull, branch, comparison, runs, number }) {
+export function mergeReadiness({ pull, branch, comparison, runs, statuses, number }) {
   if (pull.number !== number || pull.base?.repo?.full_name !== repository || pull.base?.ref !== "main" ||
       pull.head?.repo?.full_name !== repository || !shaPattern.test(pull.head?.sha || "")) {
     return "Only Wahl pull requests targeting main can be merged here.";
@@ -28,7 +28,9 @@ export function mergeReadiness({ pull, branch, comparison, runs, number }) {
     run.event === "pull_request" && run.path === ".github/workflows/ci.yml" &&
     run.repository?.full_name === repository && run.pull_requests?.some((pr) => pr.number === number))
     .sort((a, b) => b.id - a.id)[0];
-  if (!latest || latest.status !== "completed" || latest.conclusion !== "success") {
+  const revised = statuses?.statuses?.find((status) => status.context === "wahl/revision-validation" &&
+    status.state === "success");
+  if ((!latest || latest.status !== "completed" || latest.conclusion !== "success") && !revised) {
     return "Validate Wahl must pass tests and build for this commit before merging.";
   }
   return null;
@@ -66,11 +68,12 @@ export async function reviewOrMerge({ owner, userId, post, automation, input, to
   if (!shaPattern.test(pull.head?.sha || "")) throw failure("The pull request commit could not be verified.");
   const branch = await github("commits/main");
   if (!shaPattern.test(branch.sha || "")) throw failure("The main branch could not be verified.");
-  const [comparison, runs] = await Promise.all([
+  const [comparison, runs, statuses] = await Promise.all([
     github(`compare/${branch.sha}...${pull.head.sha}`),
     github(`actions/workflows/ci.yml/runs?head_sha=${pull.head.sha}&event=pull_request&per_page=100`),
+    github(`commits/${pull.head.sha}/status`),
   ]);
-  const reason = mergeReadiness({ pull, branch, comparison, runs, number });
+  const reason = mergeReadiness({ pull, branch, comparison, runs, statuses, number });
   const review = { number, headSha: pull.head.sha, baseSha: branch.sha, ready: !reason,
     merged: pull.merged === true, message: reason || "Tests and build passed. Review the change before merging." };
   if (!merging) return { review };
