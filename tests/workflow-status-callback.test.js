@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 const workflow = readFileSync(new URL("../.github/workflows/wahl-fix.yml", import.meta.url), "utf8");
 const callbackFunction = readFileSync(new URL("../supabase/functions/update-wahl-fix/index.ts", import.meta.url), "utf8");
 const testDeployment = readFileSync(new URL("../.github/workflows/deploy-test.yml", import.meta.url), "utf8");
+const schema = readFileSync(new URL("../database/schema.sql", import.meta.url), "utf8");
+const serviceRoleGrant = readFileSync(new URL("../supabase/migrations/20260906194000_automation_service_role_grants.sql", import.meta.url), "utf8");
 
 test("workflow reports working and every completion outcome", () => {
   assert.match(workflow, /status: "working"/);
@@ -37,6 +39,12 @@ test("callback accepts no browser credentials and limits updates to active reque
   assert.match(callbackFunction, /Deno\.env\.get\("WAHL_STATUS_CALLBACK_TOKEN"\)/);
   assert.match(callbackFunction, /\.in\("status", \["queued", "working"\]\)/);
   assert.match(callbackFunction, /crypto\.subtle\.digest/);
+});
+
+test("status callback has the table privileges required by its service role", () => {
+  const grant = /grant select, update on public\.automation_requests to service_role;/;
+  assert.match(schema, grant);
+  assert.match(serviceRoleGrant, grant);
 });
 
 test("validated pull requests dispatch a serialized test-backend deployment", () => {
