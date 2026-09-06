@@ -68,16 +68,25 @@ jobs:
       - uses: supabase/setup-cli@v1
         with: { version: latest }
       - name: Apply migrations
-        env: { SUPABASE_DB_URL: "${{ secrets.SUPABASE_DB_URL }}" }
-        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        env: { RAW_SUPABASE_DB_URL: "${{ secrets.SUPABASE_DB_URL }}" }
+        run: |
+          db_url="$(printf '%s' "$RAW_SUPABASE_DB_URL" | tr -d '\r\n')"
+          case "$db_url" in
+            postgres://*|postgresql://*) ;;
+            *) echo "SUPABASE_DB_URL must be a complete postgres:// or postgresql:// connection URI." >&2; exit 1 ;;
+          esac
+          echo "::add-mask::$db_url"
+          supabase db push --db-url "$db_url"
       - name: Deploy Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          RAW_SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
-          supabase functions deploy dispatch-wahl-fix --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
-          supabase functions deploy update-wahl-fix --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
-          supabase functions deploy record-wahl-activity --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
+          printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
+          supabase functions deploy dispatch-wahl-fix --project-ref "$project_ref" --no-verify-jwt
+          supabase functions deploy update-wahl-fix --project-ref "$project_ref" --no-verify-jwt
+          supabase functions deploy record-wahl-activity --project-ref "$project_ref" --no-verify-jwt
   deploy-pages:
     needs: [validate, deploy]
     runs-on: ubuntu-latest

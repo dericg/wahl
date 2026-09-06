@@ -43,6 +43,8 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
   assert.match(workflow, /event_type=wahl_test_deploy/);
   assert.match(testDeployment, /group: wahl-test-backend/);
   assert.match(testDeployment, /supabase db push --db-url/);
+  assert.match(testDeployment, /tr -d '\\r\\n'/);
+  assert.match(testDeployment, /postgres:\/\/\*\|postgresql:\/\/\*/);
   assert.match(testDeployment, /environment: test/);
   assert.match(testDeployment, /actions\/upload-pages-artifact@v3/);
   assert.match(testDeployment, /actions\/deploy-pages@v4/);
