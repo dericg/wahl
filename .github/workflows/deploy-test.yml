@@ -14,6 +14,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    environment: test
     permissions: { contents: read, pull-requests: read }
     outputs:
       number: ${{ steps.pr.outputs.number }}
@@ -40,7 +41,22 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm test
-      - run: npm run build
+      - name: Normalize public test configuration
+        id: public
+        env:
+          URL_VALUE: ${{ vars.VITE_SUPABASE_URL }}
+          KEY_VALUE: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          echo "url=$(printf '%s' "$URL_VALUE" | tr -d '\r\n')" >> "$GITHUB_OUTPUT"
+          echo "key=$(printf '%s' "$KEY_VALUE" | tr -d '\r\n')" >> "$GITHUB_OUTPUT"
+      - name: Build GitHub Pages artifact
+        env:
+          WAHL_BASE_PATH: /wahl/
+          VITE_SUPABASE_URL: ${{ steps.public.outputs.url }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ steps.public.outputs.key }}
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
   deploy:
     needs: validate
     runs-on: ubuntu-latest
@@ -62,9 +78,24 @@ jobs:
           supabase functions deploy dispatch-wahl-fix --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
           supabase functions deploy update-wahl-fix --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
           supabase functions deploy record-wahl-activity --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+  deploy-pages:
+    needs: [validate, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: pages
+        uses: actions/deploy-pages@v4
       - name: Comment result
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ needs.validate.outputs.number }}
           SHA: ${{ needs.validate.outputs.sha }}
-        run: gh pr comment "$PR" --body "Automated test-backend deployment succeeded for commit \`$SHA\`. Frontend publication to OpenAI Sites remains a separate trusted Sites step."
+          PAGE_URL: ${{ steps.pages.outputs.page_url }}
+        run: gh pr comment "$PR" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"

@@ -43,7 +43,7 @@ The automation record supports `queued`, `working`, `pr_ready`, `no_change`, `fa
 
 To run an existing issue, open **Actions → Turn a Wahl thought into a pull request → Run workflow**, enter its number in `issue_number`, and leave `request_id`, `post_id`, and `thought` empty. GitHub restricts manual workflow dispatch to users with write access. The issue must be open and belong to this repository. Its content remains untrusted task input, and the Codex job never merges or deploys the result.
 
-When a review pull request is created, the workflow dispatches `deploy-test.yml`. That trusted, serialized workflow revalidates the exact PR commit, applies committed migrations to the owner-approved live Supabase test backend, deploys the Wahl Edge Functions, and comments the result on the pull request. Its credentials live only in the GitHub `test` environment. OpenAI Sites frontend publication remains a separate trusted Sites operation.
+When a review pull request is created, the workflow dispatches `deploy-test.yml`. That trusted, serialized workflow revalidates the exact PR commit, applies committed migrations to the owner-approved live Supabase test backend, deploys the Wahl Edge Functions, publishes the frontend to GitHub Pages, and comments the review URL on the pull request. Its Supabase credentials live only in the GitHub `test` environment. OpenAI Sites remains a separate production publishing path.
 
 ### Automation configuration
 
