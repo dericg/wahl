@@ -69,7 +69,7 @@ Create a GitHub environment named `test` with this exact configuration:
 | Variable | `VITE_SUPABASE_URL` | `https://rzmgyvkvfjbcsxegafko.supabase.co` |
 | Variable | `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Wahl publishable key |
 
-`SUPABASE_DB_URL` is not used by the current workflow. GitHub-hosted runners use an IPv4-compatible Supabase pooler: the workflow must call `supabase link --project-ref "$project_ref"` before `supabase db push`. An unlinked push can select Supabase's IPv6-only direct database endpoint and fail even when every credential is correct.
+`SUPABASE_DB_URL` is not used by the current workflow. GitHub-hosted runners use Wahl's IPv4-compatible transaction pooler at `aws-0-us-west-2.pooler.supabase.com:6543`. The workflow removes accidental copied line endings, safely percent-encodes `SUPABASE_DB_PASSWORD`, constructs the connection URL only in the runner, and calls `supabase db push --db-url "$db_url"`. Port `6543` has been directly verified with `psql`; the session pooler on `5432` rejected the same valid password. Do not add `supabase link`: Wahl's access token can deploy functions but does not have the Supabase organization privilege required by that Management API operation.
 
 To deploy an open pull request for review, open **Actions → Deploy Wahl test backend → Run workflow** and enter the pull-request number. The CLI equivalent is:
 
@@ -81,7 +81,9 @@ gh workflow run deploy-test.yml --repo dericg/wahl --ref main \
 Use the applicable pull-request number rather than always using `23`. A successful run completes validation, database migrations, Edge Function deployment, and GitHub Pages deployment, then comments the review URL on the pull request. If the run fails, inspect its failed step before rotating credentials:
 
 - Empty `RAW_SUPABASE_PROJECT_REF`: the environment variable is missing or the workflow is reading `secrets` instead of `vars`.
-- `IPv6 is not supported`: the workflow did not link the project before pushing migrations.
-- Password or SASL authentication failure: update only `SUPABASE_DB_PASSWORD` with the current database password.
+- `IPv6 is not supported`: the workflow used Supabase's direct endpoint instead of Wahl's Shared Pooler.
+- Authorization failure during `supabase link`: remove the link step and use the Shared Pooler URL; the configured token intentionally lacks that Management API privilege.
+- Password or SASL authentication failure on port `6543`: update only `SUPABASE_DB_PASSWORD` with the current database password. Failure only on port `5432` is a session-pooler issue and is not evidence that the password is wrong.
+- `Remote migration versions not found`: compare the remote versions with repository history. Never rename or round an applied migration timestamp and never blindly mark a real migration reverted. Wahl's initial recorded versions are `20260905053925` and `20260905062255`.
 
 After correcting the specific cause, rerun the same workflow with the same pull-request number. A migration failure deliberately prevents Edge Function and Pages deployment, so there is no new test site to review until all three jobs pass.
