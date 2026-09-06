@@ -98,4 +98,5 @@ jobs:
           PR: ${{ needs.validate.outputs.number }}
           SHA: ${{ needs.validate.outputs.sha }}
           PAGE_URL: ${{ steps.pages.outputs.page_url }}
-        run: gh pr comment "$PR" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
+        run: |
+          gh pr comment "$PR" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
