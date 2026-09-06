@@ -15,7 +15,7 @@ Without Supabase environment variables, the development server runs as an intera
 
 ## Repository activity
 
-Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.
+Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. The feed filter can show all entries or only GitHub issue events. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.
 
 GitHub Actions sends normalized event summaries to the authenticated `record-wahl-activity` Edge Function. The function validates the shared callback token and Wahl-only GitHub URLs before writing to `repository_activity`. Public visitors may read these events, but browser clients cannot insert or modify them. Run the activity workflow manually once after rollout to seed recent history; later events arrive automatically.
 

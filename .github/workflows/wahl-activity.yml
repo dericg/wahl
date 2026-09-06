@@ -36,8 +36,8 @@ jobs:
         run: |
           if test "${{ github.event_name }}" = "workflow_dispatch"; then
             gh api "repos/${{ github.repository }}/commits?per_page=8" > "$RUNNER_TEMP/commits.json"
-            gh api "repos/${{ github.repository }}/issues?state=all&sort=updated&direction=desc&per_page=8" > "$RUNNER_TEMP/issues.json"
-            gh api "repos/${{ github.repository }}/pulls?state=all&sort=updated&direction=desc&per_page=8" > "$RUNNER_TEMP/pulls.json"
+            gh api --paginate "repos/${{ github.repository }}/issues?state=all&sort=updated&direction=desc&per_page=100" --slurp | jq 'add' > "$RUNNER_TEMP/issues.json"
+            gh api --paginate "repos/${{ github.repository }}/pulls?state=all&sort=updated&direction=desc&per_page=100" --slurp | jq 'add' > "$RUNNER_TEMP/pulls.json"
             gh api "repos/${{ github.repository }}/deployments?per_page=5" > "$RUNNER_TEMP/deployments.json"
             gh api "repos/${{ github.repository }}/actions/runs?per_page=8" > "$RUNNER_TEMP/runs.json"
             jq -n --slurpfile commits "$RUNNER_TEMP/commits.json" --slurpfile issues "$RUNNER_TEMP/issues.json" --slurpfile pulls "$RUNNER_TEMP/pulls.json" --slurpfile deployments "$RUNNER_TEMP/deployments.json" --slurpfile runs "$RUNNER_TEMP/runs.json" \
