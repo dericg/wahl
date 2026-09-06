@@ -87,6 +87,7 @@ Use the applicable pull-request number rather than always using `23`. A successf
 - Authorization failure during `supabase link`: remove the link step and use the Shared Pooler URL; the configured token intentionally lacks that Management API privilege.
 - Password or SASL authentication failure on port `6543`: update only `SUPABASE_DB_PASSWORD` with the current database password. Failure only on port `5432` is a session-pooler issue and is not evidence that the password is wrong.
 - `Remote migration versions not found`: compare the remote versions with repository history. Never rename or round an applied migration timestamp and never blindly mark a real migration reverted. Wahl's initial recorded versions are `20260905053925` and `20260905062255`.
+- A version applied by an unmerged test PR is still part of the shared database's forward-only history. Carry that exact migration file into later deployment branches and `main`; do not replace it with an empty placeholder. Migration `20260906120000` entered the shared baseline through PR #23.
 - `not a git repository` during the final comment: the Pages job has no checkout, so its `gh pr comment` command must include `--repo "$GITHUB_REPOSITORY"`. The site may already have published successfully even though the overall run is marked failed.
 
 After correcting the specific cause, rerun the same workflow with the same pull-request number. A migration failure deliberately prevents Edge Function and Pages deployment, so there is no new test site to review until all three jobs pass.
