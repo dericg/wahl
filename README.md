@@ -15,9 +15,15 @@ Without Supabase environment variables, the development server runs as an intera
 
 ## Repository activity
 
-Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. The feed filter can show all entries or only GitHub issue events. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.
+Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. All keeps lifecycle events in chronological order. GitHub issues shows one entry per issue in its newest loaded state, with a count of distinct issues loaded. The wall initially displays up to 20 combined entries; Load older extends the same feed. Counts describe loaded entries, not repository totals. Every card shows relative age and the exact local time, and relative ages refresh while the wall is open. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.
 
 GitHub Actions sends normalized event summaries to the authenticated `record-wahl-activity` Edge Function. The function validates the shared callback token and Wahl-only GitHub URLs before writing to `repository_activity`. Public visitors may read these events, but browser clients cannot insert or modify them. Run the activity workflow manually once after rollout to seed recent history; later events arrive automatically.
+
+For the feed integrity update, apply `supabase/migrations/20260906120000_feed_integrity.sql` (also recorded in `database/schema.sql`) before deploying the updated recorder and app. The idempotent migration removes recorder/unfinished workflow noise, reconciles workflow attempts and duplicate issue snapshots, and guards against older callbacks overwriting newer outcomes. Only completed outcomes from Validate Wahl and Turn a Wahl thought into a pull request are retained. The existing manual activity workflow backfills all historical issues; repeating it reuses update identities. No workflow file changes are required.
+
+Pagination uses timestamp and ID cursors for each source, preserves timestamp precision, and only advances over consumed rows. A failed older-page read preserves both cursors for retry. If the first activity read fails, the session uses the build's recent commits so thoughts remain available; reload to retry live activity. Newly arriving or updated events above the loaded cursors appear on reload.
+
+Before merging, manually check desktop and narrow layouts, keyboard and touch access to timestamps and Load older, and owner/public sign-in transitions. Browser checks and live database changes are intentionally excluded from fix automation.
 
 ## Production setup
 
@@ -55,6 +61,8 @@ The workflow requires these GitHub Actions secrets:
 
 The `dispatch-wahl-fix` Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. The `update-wahl-fix` and `record-wahl-activity` Edge Functions require the same `WAHL_STATUS_CALLBACK_TOKEN` value stored as a Supabase secret. Use a long random value and never expose it to the browser or commit it.
 
+The database must grant `service_role` both `select` and `update` on `automation_requests`; the status callback updates and returns the request row. Migration `20260906194000_automation_service_role_grants.sql` establishes these privileges idempotently. Without them, a `#fix` dispatch stops before Codex runs and Postgres reports SQLSTATE `42501`.
+
 Before enabling callbacks, apply the database migration that adds `no_change`, deploy both Edge Functions, and configure the matching GitHub and Supabase secrets. The automation never merges automatically, and production publishing remains separately approved.
 
 ### Test deployment setup and operation
@@ -85,6 +93,7 @@ Use the applicable pull-request number rather than always using `23`. A successf
 - Authorization failure during `supabase link`: remove the link step and use the Shared Pooler URL; the configured token intentionally lacks that Management API privilege.
 - Password or SASL authentication failure on port `6543`: update only `SUPABASE_DB_PASSWORD` with the current database password. Failure only on port `5432` is a session-pooler issue and is not evidence that the password is wrong.
 - `Remote migration versions not found`: compare the remote versions with repository history. Never rename or round an applied migration timestamp and never blindly mark a real migration reverted. Wahl's initial recorded versions are `20260905053925` and `20260905062255`.
+- A version applied by an unmerged test PR is still part of the shared database's forward-only history. Carry that exact migration file into later deployment branches and `main`; do not replace it with an empty placeholder. Migration `20260906120000` entered the shared baseline through PR #23.
 - `not a git repository` during the final comment: the Pages job has no checkout, so its `gh pr comment` command must include `--repo "$GITHUB_REPOSITORY"`. The site may already have published successfully even though the overall run is marked failed.
 
 After correcting the specific cause, rerun the same workflow with the same pull-request number. A migration failure deliberately prevents Edge Function and Pages deployment, so there is no new test site to review until all three jobs pass.

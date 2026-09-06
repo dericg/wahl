@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Globe2, Lock, LogIn, LogOut, Trash2 } from "lucide-react";
 import { INITIAL_POSTS } from "./data";
 import { isCloudConfigured, supabase } from "./supabase";
@@ -6,17 +6,16 @@ import ThoughtEditor from "./ThoughtEditor";
 import { draftDetails, FormattedText } from "./formattedText";
 import { fixPresentation, hasActiveFix } from "./fixStatus";
 import { filterWallEntries, mergeActivity, wallEntries } from "./activity";
+import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
+import { exactTime, timeAgo } from "./time";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
-function timeAgo(value) {
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-  if (seconds < 15) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
+function CardTime({ value, now }) {
+  const exact = useMemo(() => exactTime(value), [value]);
+  return <time className="card-time" dateTime={new Date(value).toISOString()}>
+    <span>{timeAgo(value, now)}</span><span className="exact-time">{exact}</span>
+  </time>;
 }
 
 function PersonalNote() {
@@ -54,11 +53,11 @@ function ReleaseHistory() {
   );
 }
 
-function ActivityCard({ activity }) {
+function ActivityCard({ activity, now }) {
   return (
     <article className="post-card activity-card" aria-label={`${activity.kind} from GitHub`}>
       <header className="post-header">
-        <div><strong>Wahl</strong><time dateTime={activity.occurred_at}>{timeAgo(activity.occurred_at)}</time></div>
+        <div><strong>Wahl</strong><CardTime value={activity.occurred_at} now={now} /></div>
         <span className="activity-kind">{activity.kind}</span>
       </header>
       <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a></p>
@@ -93,7 +92,7 @@ function Composer({ onPost, busy }) {
   );
 }
 
-function PostCard({ post, owner, onDelete, onSendFix, onRefreshFix, fix }) {
+function PostCard({ post, now, owner, onDelete, onSendFix, onRefreshFix, fix }) {
   const [progressOpen, setProgressOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [progressError, setProgressError] = useState("");
@@ -123,7 +122,7 @@ function PostCard({ post, owner, onDelete, onSendFix, onRefreshFix, fix }) {
   return (
     <article className="post-card">
       <header className="post-header">
-        <div><strong className="mine">Deric</strong><time dateTime={new Date(post.created_at).toISOString()}>{timeAgo(post.created_at)}</time></div>
+        <div><strong className="mine">Deric</strong><CardTime value={post.created_at} now={now} /></div>
         <div className="post-tools"><span className="audience-badge"><Icon size={12} />{privatePost ? "Only me" : "Everyone"}</span>{owner && <button className="delete-post" type="button" onClick={() => onDelete(post.id)} aria-label="Delete this post"><Trash2 size={13} /></button>}</div>
       </header>
       <p><FormattedText text={post.text} /></p>
@@ -188,55 +187,120 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [fixes, setFixes] = useState({});
   const [activity, setActivity] = useState(() => mergeActivity([], __WAHL_RELEASE__.commits));
-  const [activityLoading, setActivityLoading] = useState(Boolean(supabase));
   const [activityUnavailable, setActivityUnavailable] = useState(false);
   const [feedFilter, setFeedFilter] = useState("all");
-  const entries = wallEntries(posts, activity);
-  const visibleEntries = filterWallEntries(entries, feedFilter);
+  const [now, setNow] = useState(Date.now);
+  const [hasMore, setHasMore] = useState(false);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const pager = useRef(null);
+  const loadedPosts = useRef(posts);
+  const entries = useMemo(() => wallEntries(posts, activity), [posts, activity]);
+  const visibleEntries = useMemo(() => filterWallEntries(entries, feedFilter), [entries, feedFilter]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  async function loadFixes() {
+    if (!supabase || !loadedPosts.current.length) return;
+    const current = pager.current;
+    const { data, error } = await supabase.from("automation_requests")
+      .select("id,post_id,status,pull_request_url,updated_at").in("post_id", loadedPosts.current.map((post) => post.id));
+    if (current === pager.current && !error) setFixes(Object.fromEntries((data || []).map((fix) => [fix.post_id, fix])));
+  }
+
+  async function loadOlder(current = pager.current) {
+    if (!supabase || !current || current.pending) return;
+    current.pending = true;
+    setOlderLoading(true);
+    try {
+      const page = await loadFeedPage({
+        cursor: current.cursor,
+        loadPosts: feedSource(supabase, "posts"),
+        loadActivity: async (cursor, limit) => {
+          if (!current.fallback) {
+            try { return await feedSource(supabase, "repository_activity")(cursor, limit); }
+            catch (error) {
+              // A failed first activity read must not hide thoughts. Later page
+              // failures leave both cursors unchanged so Load older can retry.
+              if (current.loaded) throw error;
+              current.fallback = true;
+            }
+          }
+          return mergeActivity([], __WAHL_RELEASE__.commits).filter((entry) => !cursor ||
+            timestampKey(entry.occurred_at) < timestampKey(cursor.occurred_at) ||
+            (timestampKey(entry.occurred_at) === timestampKey(cursor.occurred_at) && entry.source_id > cursor.source_id))
+            .sort((left, right) => timestampKey(right.occurred_at).localeCompare(timestampKey(left.occurred_at)) || left.source_id.localeCompare(right.source_id)).slice(0, limit);
+        },
+      });
+      if (current !== pager.current) return;
+      current.cursor = page.cursor;
+      current.loaded = true;
+      setPosts((previous) => appendPosts(previous, page.posts).filter((post) => !current.deleted.has(post.id)));
+      setActivity((previous) => mergeActivity([...previous, ...page.activity]));
+      setActivityUnavailable(current.fallback);
+      setHasMore(page.hasMore);
+      setNotice("");
+    } catch {
+      if (current !== pager.current) return;
+      setNotice("The wall couldn’t be loaded. Use Load older to try again.");
+      setHasMore(true);
+    } finally {
+      current.pending = false;
+      if (current === pager.current) { setLoading(false); setOlderLoading(false); }
+    }
+  }
+
+  async function loadWall() {
+    const current = { cursor: {}, fallback: false, loaded: false, pending: false, deleted: new Set() };
+    pager.current = current;
+    loadedPosts.current = [];
+    setPosts([]);
+    setActivity([]);
+    setOwner(false);
+    setFixes({});
+    setLoading(true);
+    setHasMore(false);
+    setActivityUnavailable(false);
+    await Promise.all([
+      loadOlder(current),
+      supabase.rpc("is_wahl_owner").then(({ data, error }) => {
+        if (current === pager.current) setOwner(!error && Boolean(data));
+      }).catch(() => { if (current === pager.current) setOwner(false); }),
+    ]);
+  }
 
   useEffect(() => {
     if (!supabase) return undefined;
     let active = true;
-    supabase.from("repository_activity")
-      .select("source_id,kind,summary,url,occurred_at")
-      .order("occurred_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (!active) return;
-        setActivity(mergeActivity(data || [], __WAHL_RELEASE__.commits));
-        setActivityUnavailable(Boolean(error));
-        setActivityLoading(false);
-      });
-    return () => { active = false; };
+    let reload;
+    let userId;
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return;
+      setSession(nextSession);
+      const nextUserId = nextSession?.user.id || null;
+      // INITIAL_SESSION starts the first page. Token refreshes for the same
+      // reader keep the loaded history and scroll position intact.
+      if (userId === nextUserId) return;
+      userId = nextUserId;
+      // Discard outstanding owner reads immediately when authentication changes.
+      pager.current = null;
+      loadedPosts.current = [];
+      setPosts([]);
+      setFixes({});
+      setOwner(false);
+      setLoading(true);
+      window.clearTimeout(reload);
+      reload = window.setTimeout(() => { if (active) loadWall(); }, 0);
+    });
+    return () => { active = false; pager.current = null; window.clearTimeout(reload); data.subscription.unsubscribe(); };
   }, []);
-
-  async function loadFixes() {
-    if (!supabase) return;
-    const { data, error } = await supabase.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at");
-    if (!error) setFixes(Object.fromEntries((data || []).map((fix) => [fix.post_id, fix])));
-  }
-
-  async function loadWall() {
-    if (!supabase) return;
-    setLoading(true);
-    const [{ data, error }, { data: isOwner }, { data: fixData }] = await Promise.all([
-      supabase.from("posts").select("id,text,audience_type,created_at").order("created_at", { ascending: false }),
-      supabase.rpc("is_wahl_owner"),
-      supabase.from("automation_requests").select("id,post_id,status,pull_request_url,updated_at"),
-    ]);
-    setOwner(Boolean(isOwner));
-    setFixes(Object.fromEntries((fixData || []).map((fix) => [fix.post_id, fix])));
-    if (error) setNotice("The wall couldn’t be loaded. Please try again shortly.");
-    else { setPosts(data || []); setNotice(""); }
-    setLoading(false);
-  }
 
   useEffect(() => {
-    if (!supabase) return undefined;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    loadWall();
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => { setSession(nextSession); window.setTimeout(loadWall, 0); });
-    return () => data.subscription.unsubscribe();
-  }, []);
+    loadedPosts.current = posts;
+    if (owner) loadFixes();
+  }, [posts, owner]);
 
   useEffect(() => {
     if (!supabase || !session || !owner || !hasActiveFix(fixes)) return undefined;
@@ -250,18 +314,23 @@ export default function App() {
       return true;
     }
     if (!supabase || !session || !owner) return false;
+    const current = pager.current;
     setBusy(true);
     const { data, error } = await supabase.from("posts").insert({ author_id: session.user.id, text, audience_type: audience }).select("id,text,audience_type,created_at").single();
     setBusy(false);
+    if (current !== pager.current) return false;
     if (error) { setNotice(error.message); return false; }
-    setPosts((current) => [data, ...current]);
+    setPosts((posts) => appendPosts(posts, [data]));
     return true;
   }
 
   async function deletePost(id) {
     if (previewMode) { setPosts((current) => current.filter((post) => post.id !== id)); return; }
+    const current = pager.current;
     const { error } = await supabase.from("posts").delete().eq("id", id);
-    if (error) setNotice(error.message); else setPosts((current) => current.filter((post) => post.id !== id));
+    if (current !== pager.current) return;
+    if (error) setNotice(error.message);
+    else { current?.deleted.add(id); setPosts((posts) => posts.filter((post) => post.id !== id)); }
   }
 
   async function sendFix(postId) {
@@ -329,14 +398,16 @@ export default function App() {
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
       <section className="feed" aria-label="The Wall">
-        <div className="feed-heading"><span>the wall</span><span>{loading || activityLoading ? "loading…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"}`}</span></div>
+        <div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded`}</span></div>
         <div className="feed-filters" role="group" aria-label="Filter the wall">
           <button type="button" className={feedFilter === "all" ? "selected" : ""} aria-pressed={feedFilter === "all"} onClick={() => setFeedFilter("all")}>All</button>
           <button type="button" className={feedFilter === "issues" ? "selected" : ""} aria-pressed={feedFilter === "issues"} onClick={() => setFeedFilter("issues")}>GitHub issues</button>
         </div>
         {activityUnavailable && <p className="activity-notice" role="status">Some live GitHub activity is unavailable. Recent commits from this build are shown.</p>}
-        {!loading && !activityLoading && visibleEntries.length === 0 && <div className="empty-wall">{feedFilter === "issues" ? "No GitHub issues are in the feed yet." : "The wall is quiet for now."}</div>}
-        {visibleEntries.map((entry) => entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} /> : <PostCard key={entry.id} post={entry} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
+        {!loading && visibleEntries.length === 0 && <div className="empty-wall">{feedFilter === "issues" ? "No GitHub issues in the loaded entries." : "The wall is quiet for now."}</div>}
+        {visibleEntries.map((entry) => entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} now={now} /> : <PostCard key={entry.id} post={entry} now={now} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
+        {hasMore && <button className="load-older" type="button" aria-disabled={olderLoading} onClick={() => loadOlder()}>{olderLoading ? "Loading older…" : "Load older"}</button>}
+        <span className="feed-status" role="status">{olderLoading ? "Loading entries…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded${!hasMore && !loading ? ". All available entries loaded." : "."}`}</span>
       </section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p></footer>
     </div></main>
