@@ -68,15 +68,15 @@ jobs:
       - uses: supabase/setup-cli@v1
         with: { version: latest }
       - name: Apply migrations
-        env: { RAW_SUPABASE_DB_URL: "${{ secrets.SUPABASE_DB_URL }}" }
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          RAW_SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
-          db_url="$(printf '%s' "$RAW_SUPABASE_DB_URL" | tr -d '\r\n')"
-          case "$db_url" in
-            postgres://*|postgresql://*) ;;
-            *) echo "SUPABASE_DB_URL must be a complete postgres:// or postgresql:// connection URI." >&2; exit 1 ;;
-          esac
-          echo "::add-mask::$db_url"
-          supabase db push --db-url "$db_url"
+          project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
+          printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
+          test -n "$SUPABASE_DB_PASSWORD"
+          supabase db push --project-ref "$project_ref"
       - name: Deploy Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

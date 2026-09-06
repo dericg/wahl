@@ -42,9 +42,9 @@ test("callback accepts no browser credentials and limits updates to active reque
 test("validated pull requests dispatch a serialized test-backend deployment", () => {
   assert.match(workflow, /event_type=wahl_test_deploy/);
   assert.match(testDeployment, /group: wahl-test-backend/);
-  assert.match(testDeployment, /supabase db push --db-url/);
-  assert.match(testDeployment, /tr -d '\\r\\n'/);
-  assert.match(testDeployment, /postgres:\/\/\*\|postgresql:\/\/\*/);
+  assert.match(testDeployment, /SUPABASE_DB_PASSWORD: \$\{\{ secrets\.SUPABASE_DB_PASSWORD \}\}/);
+  assert.match(testDeployment, /supabase db push --project-ref "\$project_ref"/);
+  assert.doesNotMatch(testDeployment, /SUPABASE_DB_URL/);
   assert.match(testDeployment, /environment: test/);
   assert.match(testDeployment, /actions\/upload-pages-artifact@v3/);
   assert.match(testDeployment, /actions\/deploy-pages@v4/);
