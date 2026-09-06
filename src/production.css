@@ -13,7 +13,11 @@
 .notice, .empty-wall { border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .notice { margin-bottom: 14px; color: #d6b15e; background: var(--brass-soft); }
 .empty-wall { text-align: center; padding: 30px; }
-.owner-access { display: flex; justify-content: center; margin-top: 13px; }
+.site-header { position: sticky; top: 0; z-index: 10; padding-top: 1px; background: rgba(19, 12, 8, .96); box-shadow: 0 12px 20px rgba(14, 9, 6, .92); }
+main { overflow: clip; }
+.header-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px; margin-bottom: 24px; color: var(--muted); font-size: 10px; }
+.header-controls button:focus-visible, .header-controls input:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.owner-access { display: flex; justify-content: flex-end; min-width: 0; }
 .quiet-button { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #675640; font-size: 9px; cursor: pointer; }
 .quiet-button:hover { color: var(--muted); }
 .sign-in { display: grid; grid-template-columns: 1fr auto; gap: 6px; width: min(100%, 340px); }
@@ -22,9 +26,9 @@
 .sign-in small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
 .password-sign-in { grid-template-columns: 1fr; }
 .password-sign-in button { justify-self: end; }
-.account-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; width: 100%; }
+.account-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; width: 100%; }
 .account-message { flex-basis: 100%; color: var(--muted); font-size: 9px; }
-.release-history { width: min(100%, 390px); margin: 14px auto 0; }
+.release-history { min-width: 0; overflow-wrap: anywhere; }
 .release-history > button { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #675640; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
 .release-history > button:hover { color: var(--muted); }
 .release-history > button svg { transition: transform .2s ease; }
@@ -66,4 +70,4 @@
 .load-older[aria-disabled="true"] { opacity: .6; cursor: default; }
 .load-older:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .feed-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-@media(max-width:520px){.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}
+@media(max-width:520px){.header-controls{grid-template-columns:minmax(0,1fr)}.owner-access,.account-controls{justify-content:flex-start}.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}

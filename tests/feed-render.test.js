@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -8,6 +8,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { build } from "vite";
 import react from "@vitejs/plugin-react";
+
+test("site header remains pinned while the wall scrolls", async () => {
+  const css = await readFile(fileURLToPath(new URL("../src/production.css", import.meta.url)), "utf8");
+  assert.match(css, /\.site-header\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
+  assert.match(css, /main\s*\{[^}]*overflow:\s*clip;/s);
+});
 
 // Finite server rendering checks card semantics and owner/public controls.
 // No server, browser, backend connection, timers or React effects are started.
