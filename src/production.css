@@ -74,4 +74,11 @@ main { overflow: clip; }
 .load-older[aria-disabled="true"] { opacity: .6; cursor: default; }
 .load-older:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .feed-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.about-wall { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); scroll-margin-top: 240px; }
+.about-wall h2 { margin: 0 0 12px; color: var(--brass); font: 600 16px "Fraunces", serif; }
+.about-wall p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.about-wall .about-sources { margin-bottom: 0; font-size: 11px; }
+.about-wall a { color: var(--muted); text-underline-offset: 3px; }
+.about-wall a:hover { color: var(--ink); }
+.about-wall:focus-visible, .about-wall a:focus-visible, .minimal-footer a:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 @media(max-width:520px){.header-controls{grid-template-columns:minmax(0,1fr)}.owner-access,.account-controls{justify-content:flex-start}.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}
