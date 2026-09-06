@@ -22,6 +22,7 @@ function getCommitHistory() {
 }
 
 export default defineConfig({
+  base: process.env.WAHL_BASE_PATH || "/",
   plugins: [react()],
   define: {
     __WAHL_RELEASE__: JSON.stringify({ version, commits: getCommitHistory() }),
