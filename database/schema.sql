@@ -59,6 +59,7 @@ grant select on public.posts to anon, authenticated;
 grant insert, update, delete on public.posts to authenticated;
 grant select on public.automation_requests to authenticated;
 grant insert on public.automation_requests to authenticated;
+grant select, update on public.automation_requests to service_role;
 revoke all on public.repository_activity from anon, authenticated;
 grant select on public.repository_activity to anon, authenticated;
 grant select, insert, update on public.repository_activity to service_role;

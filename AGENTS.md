@@ -56,6 +56,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Keep post text between 1 and 320 characters and preserve the `private` / `everyone` audience values.
 - Repository activity is public, read-only wall content. Browser clients may select `repository_activity` but must never insert, update, or delete its records.
 - Accept repository activity writes only through the authenticated Edge Function. Validate the shared callback token, bounded event fields, timestamps, event kinds, and `https://github.com/dericg/wahl` URLs before using the service role.
+- Keep explicit `select, update` grants on `automation_requests` for `service_role`; `update-wahl-fix` requires both because PostgREST returns the updated row. RLS bypass does not replace table privileges. A missing grant appears in Postgres logs as SQLSTATE `42501` and prevents automation from advancing beyond `queued`.
 - When changing data behavior, update both the application code and `database/schema.sql` as needed.
 - Treat the Supabase publishable key as client-safe configuration, but never commit passwords, service-role keys, access tokens, or `.env.local`.
 

@@ -55,6 +55,8 @@ The workflow requires these GitHub Actions secrets:
 
 The `dispatch-wahl-fix` Edge Function requires a fine-grained, repository-scoped GitHub token named `WAHL_GITHUB_TOKEN` with **Actions: write** permission. The `update-wahl-fix` and `record-wahl-activity` Edge Functions require the same `WAHL_STATUS_CALLBACK_TOKEN` value stored as a Supabase secret. Use a long random value and never expose it to the browser or commit it.
 
+The database must grant `service_role` both `select` and `update` on `automation_requests`; the status callback updates and returns the request row. Migration `20260906194000_automation_service_role_grants.sql` establishes these privileges idempotently. Without them, a `#fix` dispatch stops before Codex runs and Postgres reports SQLSTATE `42501`.
+
 Before enabling callbacks, apply the database migration that adds `no_change`, deploy both Edge Functions, and configure the matching GitHub and Supabase secrets. The automation never merges automatically, and production publishing remains separately approved.
 
 ### Test deployment setup and operation
