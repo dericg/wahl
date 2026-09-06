@@ -321,7 +321,10 @@ export default function App() {
 
   return (
     <main><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
-      <header className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></header>
+      <header className="site-header">
+        <div className="header-controls"><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></div>
+        <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
+      </header>
       <PersonalNote />
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
@@ -335,7 +338,7 @@ export default function App() {
         {!loading && !activityLoading && visibleEntries.length === 0 && <div className="empty-wall">{feedFilter === "issues" ? "No GitHub issues are in the feed yet." : "The wall is quiet for now."}</div>}
         {visibleEntries.map((entry) => entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} /> : <PostCard key={entry.id} post={entry} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
       </section>
-      <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></footer>
+      <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p></footer>
     </div></main>
   );
 }
