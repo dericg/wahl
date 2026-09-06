@@ -59,13 +59,17 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - When changing data behavior, update both the application code and `database/schema.sql` as needed.
 - Treat the Supabase publishable key as client-safe configuration, but never commit passwords, service-role keys, access tokens, or `.env.local`.
 
-## Local and production behavior
+## Environments
 
 - With Supabase variables present, Wahl uses the live backend.
 - Without them, development mode uses the interactive sample wall.
 - A production build without Supabase variables is intentionally read-only.
 - Environment variables are `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
 - Keep `.env.example` aligned with any configuration changes.
+- Until a separate production environment is established, treat the OpenAI Sites project configured in `.openai/hosting.json` and its public URL as Wahl's test/review site, not as a production release target.
+- The test/review site currently uses the live Supabase project. Treat its posts, authentication records, automation requests, and repository activity as real shared data even when reviewing an unmerged branch.
+- A validated pull-request branch may be manually published to the test/review site when Deric explicitly requests it. Record the branch and commit being reviewed, verify the deployed URL, and expect later test deployments to replace it.
+- Do not describe a test/review deployment as a production release. A future production environment should use an explicitly designated Sites project and, preferably, a separate Supabase project.
 
 ## Change discipline
 
@@ -89,6 +93,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Put product-direction changes on hold when they conflict with Wahl's intentionally small, personal character. Record the concern on the pull request and linked issue, then return the decision to Deric; do not close or reject a requested direction on his behalf.
 - Keep an issue open when its pull request is partial, conflicting, unvalidated, or does not satisfy every acceptance criterion. Comment with the current status, the remaining gap, and the next required action.
 - After a merge, verify the pull request state and update or close the linked issue as appropriate. Merging code does not authorize deployment.
+- When Deric requests review on the public test site, validate the pull-request branch first, publish that exact branch commit manually, and add the test URL and commit to the pull request. Test-site approval does not itself authorize merging or a production release.
 
 ## Fix automation
 
@@ -107,6 +112,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - API credits are separate from a ChatGPT subscription. After the repository owner restores API billing, rerun the workflow with the existing `issue_number` so the original issue is reused and no duplicate issue is created.
 - Never attempt to purchase credits, change OpenAI billing, rotate `OPENAI_API_KEY`, or expose secret values from automation. Those are owner-controlled recovery steps.
 - A successful pull request ends the automation. Human review is required before merge, and publishing is a separate explicit action.
+- Fix automation must never publish even to the test/review site. An explicitly requested test deployment is performed separately after the workflow has produced a pull request and the proposed branch has passed validation.
 
 ## Repository activity
 
@@ -129,7 +135,10 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - After a successful production deployment, create a Git tag named `vMAJOR.MINOR.PATCH` on the deployed commit. Never move or reuse a release tag; correct a bad release with a new version.
 - Git commit hashes identify source revisions, and OpenAI Sites version numbers identify hosting artifacts. Neither replaces Wahl's Semantic Version, and a merge alone does not create a release.
 - Publishing remains an explicit owner-approved action. If several merged changes are released together, apply the highest version increment required by any included change.
-- The next production release after adopting this policy should reconcile the already deployed repository-activity and issue-filter capabilities by moving Wahl from `0.1.0` to `0.2.0`.
+- Test/review deployments do not require a version increment or Git tag. Identify routine test builds by pull-request number, branch, commit, and Sites deployment number.
+- When a test build benefits from an explicit release identity, use a Semantic Version prerelease such as `0.3.0-test.1`, keep `package.json` and the root package version in `package-lock.json` aligned, and optionally create the matching immutable tag such as `v0.3.0-test.1` after the test deployment is verified. Increment the prerelease number for later test builds and never move or reuse a prerelease tag.
+- Tags document deployed commits; they do not trigger the current OpenAI Sites deployment. Publishing still requires building and explicitly deploying `dist`.
+- Reserve stable versions and tags without a prerelease suffix, such as `0.3.0` and `v0.3.0`, for accepted production releases.
 
 ## Validation and deployment
 
@@ -139,6 +148,7 @@ Before handing off a code change:
 2. Run `npm run build`.
 3. Check the affected experience locally when interaction or layout changed.
 4. Confirm that no secrets or `.env.local` were added to Git.
-5. If publishing was requested, deploy the built `dist` output through the existing OpenAI Sites project and verify the live URL.
+5. If test publishing was explicitly requested, deploy the validated branch's built `dist` output through the existing OpenAI Sites project, verify the test URL, and record the deployed branch and commit on the pull request.
+6. If production publishing was explicitly requested after acceptance, build the exact accepted source, deploy it through the designated production project, verify the production URL and rendered version, and create the corresponding immutable release tag.
 
-Do not deploy merely because source files changed; deploy when the user asks to publish or when deployment is explicitly part of the task.
+Do not deploy merely because source files changed. Every test or production publish requires explicit owner authorization, and publishing to the test site does not authorize merging or production release.
