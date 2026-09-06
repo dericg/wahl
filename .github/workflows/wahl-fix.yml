@@ -4,24 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       request_id:
-        description: Wahl automation request ID
-        required: true
+        description: Wahl automation request ID (required for a Wahl thought)
+        required: false
         type: string
       post_id:
-        description: Wahl post ID
-        required: true
+        description: Wahl post ID (required for a Wahl thought)
+        required: false
         type: string
       thought:
-        description: Owner-authored fix request
-        required: true
+        description: Owner-authored fix request (required for a Wahl thought)
+        required: false
         type: string
       issue_number:
-        description: Existing issue number when retrying a documented request
+        description: Existing Wahl issue number; may be used alone for an issue-only run
         required: false
         type: string
 
 concurrency:
-  group: wahl-fix-${{ inputs.request_id }}
+  group: wahl-fix-${{ inputs.request_id || format('issue-{0}', inputs.issue_number) }}
   cancel-in-progress: false
 
 jobs:
@@ -39,9 +39,75 @@ jobs:
         with:
           ref: main
 
-      - name: Mark request as working
+      - name: Resolve trusted request source
+        id: request
         env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
           REQUEST_ID: ${{ inputs.request_id }}
+          POST_ID: ${{ inputs.post_id }}
+          THOUGHT: ${{ inputs.thought }}
+        run: |
+          set -euo pipefail
+
+          write_output() {
+            name="$1"
+            value="$2"
+            delimiter="WAHL_$(openssl rand -hex 16)"
+            printf '%s<<%s\n%s\n%s\n' "$name" "$delimiter" "$value" "$delimiter" >> "$GITHUB_OUTPUT"
+          }
+
+          if test -z "$REQUEST_ID"; then
+            if test "$GITHUB_REPOSITORY" != "dericg/wahl"; then
+              echo "Issue-only automation is restricted to dericg/wahl." >&2
+              exit 1
+            fi
+            if ! printf '%s' "$ISSUE_NUMBER" | grep -Eq '^[1-9][0-9]*$'; then
+              echo "An existing issue number is required for an issue-only run." >&2
+              exit 1
+            fi
+            if test -n "$POST_ID" || test -n "$THOUGHT"; then
+              echo "Issue-only runs must not include a Wahl post ID or thought." >&2
+              exit 1
+            fi
+
+            issue_json="$(gh issue view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json number,title,body,state,url)"
+            if test "$(printf '%s' "$issue_json" | jq -r '.state')" != "OPEN"; then
+              echo "Issue-only automation requires an open issue." >&2
+              exit 1
+            fi
+
+            issue_title="$(printf '%s' "$issue_json" | jq -r '.title')"
+            issue_body="$(printf '%s' "$issue_json" | jq -r '.body // ""')"
+            issue_body="${issue_body:0:20000}"
+            write_output request_id "issue-$ISSUE_NUMBER"
+            write_output post_id "github-issue-$ISSUE_NUMBER"
+            write_output thought "${issue_title}"$'\n\n'"${issue_body}"
+            echo "track_status=false" >> "$GITHUB_OUTPUT"
+            echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          uuid_pattern='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+          if ! printf '%s' "$REQUEST_ID" | grep -Eq "$uuid_pattern" || ! printf '%s' "$POST_ID" | grep -Eq "$uuid_pattern" || test -z "$THOUGHT"; then
+            echo "Wahl thought runs require valid request and post IDs plus a non-empty thought." >&2
+            exit 1
+          fi
+          if test -n "$ISSUE_NUMBER" && ! printf '%s' "$ISSUE_NUMBER" | grep -Eq '^[1-9][0-9]*$'; then
+            echo "Existing issue number must be a positive integer." >&2
+            exit 1
+          fi
+
+          write_output request_id "$REQUEST_ID"
+          write_output post_id "$POST_ID"
+          write_output thought "$THOUGHT"
+          echo "track_status=true" >> "$GITHUB_OUTPUT"
+          echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Mark request as working
+        if: ${{ steps.request.outputs.track_status == 'true' }}
+        env:
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
           STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
           SUPABASE_URL: ${{ secrets.WAHL_SUPABASE_URL }}
         run: |
@@ -66,12 +132,13 @@ jobs:
         id: issue
         env:
           GH_TOKEN: ${{ github.token }}
-          EXISTING_ISSUE_NUMBER: ${{ inputs.issue_number }}
-          REQUEST_ID: ${{ inputs.request_id }}
-          POST_ID: ${{ inputs.post_id }}
-          THOUGHT: ${{ inputs.thought }}
+          EXISTING_ISSUE_NUMBER: ${{ steps.request.outputs.issue_number }}
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
+          POST_ID: ${{ steps.request.outputs.post_id }}
+          THOUGHT: ${{ steps.request.outputs.thought }}
         run: |
           if test -n "$EXISTING_ISSUE_NUMBER"; then
+            gh issue view "$EXISTING_ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json number --jq '.number' > /dev/null
             echo "number=$EXISTING_ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
             echo "url=https://github.com/${{ github.repository }}/issues/$EXISTING_ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
             exit 0
@@ -117,12 +184,12 @@ jobs:
 
             Inspect the relevant source, implement the smallest complete fix, and keep Wahl minimal. Do not edit files under .github/workflows. Do not commit, push, open a pull request, or deploy; later trusted workflow steps handle delivery. Run only finite validation commands such as npm test and npm run build. Never start a development server, preview server, browser, watcher, background task, or other persistent process. Before finishing, ensure no process you started remains running. Finish with a concise summary of the change and any risk.
 
-            Wahl post ID: ${{ inputs.post_id }}
-            Automation request ID: ${{ inputs.request_id }}
+            Request source: ${{ steps.request.outputs.post_id }}
+            Automation request ID: ${{ steps.request.outputs.request_id }}
             GitHub issue: #${{ steps.issue.outputs.number }}
 
             Thought:
-            ${{ inputs.thought }}
+            ${{ steps.request.outputs.thought }}
 
       - name: Restore runner ownership
         run: |
@@ -130,15 +197,17 @@ jobs:
           sudo chmod -R u+rwX "$GITHUB_WORKSPACE"
 
       - name: Validate Wahl
-        run: npm run build
+        run: |
+          npm test
+          npm run build
 
       - name: Create review branch and pull request
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUEST_ID: ${{ inputs.request_id }}
-          POST_ID: ${{ inputs.post_id }}
-          THOUGHT: ${{ inputs.thought }}
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
+          POST_ID: ${{ steps.request.outputs.post_id }}
+          THOUGHT: ${{ steps.request.outputs.thought }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           CODEX_SUMMARY: ${{ steps.codex.outputs.final-message }}
         run: |
@@ -162,7 +231,7 @@ jobs:
             "Wahl post: $POST_ID" \
             "## Codex summary" \
             "${CODEX_SUMMARY:-Codex implemented the requested Wahl improvement.}" \
-            "This pull request was created from a private #fix thought. It requires manual review and will not be merged or deployed automatically." > "$RUNNER_TEMP/pr-body.md"
+            "This pull request was created by Wahl fix automation. It requires manual review and will not be merged or deployed automatically." > "$RUNNER_TEMP/pr-body.md"
 
           pr_url="$(gh pr create \
             --base main \
@@ -175,9 +244,9 @@ jobs:
           echo "Pull request ready for review: $pr_url"
 
       - name: Record completed request
-        if: ${{ success() }}
+        if: ${{ success() && steps.request.outputs.track_status == 'true' }}
         env:
-          REQUEST_ID: ${{ inputs.request_id }}
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
           REQUEST_STATUS: ${{ steps.pr.outputs.status }}
           PULL_REQUEST_URL: ${{ steps.pr.outputs.pull_request_url }}
           STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
@@ -196,10 +265,10 @@ jobs:
             "$SUPABASE_URL/functions/v1/update-wahl-fix"
 
       - name: Record failed request
-        if: ${{ failure() }}
+        if: ${{ failure() && steps.request.outputs.track_status == 'true' }}
         continue-on-error: true
         env:
-          REQUEST_ID: ${{ inputs.request_id }}
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
           STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
           SUPABASE_URL: ${{ secrets.WAHL_SUPABASE_URL }}
         run: |

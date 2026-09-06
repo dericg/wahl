@@ -11,7 +11,18 @@ test("workflow reports working and every completion outcome", () => {
   assert.match(workflow, /echo "status=pr_ready"/);
   assert.match(workflow, /status: "failed"/);
   assert.match(workflow, /pull_request_url=\$pr_url/);
-  assert.match(workflow, /if: \$\{\{ failure\(\) \}\}/);
+  assert.match(workflow, /if: \$\{\{ failure\(\) && steps\.request\.outputs\.track_status == 'true' \}\}/);
+});
+
+test("workflow can safely reuse an existing Wahl issue without a Supabase request", () => {
+  assert.match(workflow, /issue-only run/);
+  assert.match(workflow, /gh issue view "\$ISSUE_NUMBER" --repo "\$GITHUB_REPOSITORY"/);
+  assert.match(workflow, /GITHUB_REPOSITORY" != "dericg\/wahl/);
+  assert.match(workflow, /Issue-only automation requires an open issue/);
+  assert.match(workflow, /track_status=false/);
+  assert.match(workflow, /steps\.request\.outputs\.track_status == 'true'/);
+  assert.match(workflow, /EXISTING_ISSUE_NUMBER: \$\{\{ steps\.request\.outputs\.issue_number \}\}/);
+  assert.match(workflow, /Closes #\$ISSUE_NUMBER/);
 });
 
 test("workflow callback uses only configured secrets for authentication and location", () => {

@@ -30,16 +30,18 @@ GitHub Actions sends normalized event summaries to the authenticated `record-wah
 
 The owner can publish a private thought containing `#fix`, then choose **Send to Codex** on that post. Wahl immediately shows the request as sent and calls an authenticated Supabase Edge Function. The function verifies that the requester is a registered owner and that the post belongs to that owner, is private, and contains `#fix`. Row-level security independently enforces the same requirements when the automation request is inserted.
 
-For each eligible thought, Wahl creates one `automation_requests` record and dispatches `.github/workflows/wahl-fix.yml` with the request ID, post ID, and thought. The workflow then:
+For each eligible thought, Wahl creates one `automation_requests` record and dispatches `.github/workflows/wahl-fix.yml` with the request ID, post ID, and thought. A repository maintainer may instead run the same workflow manually with only an existing open Wahl issue number. Issue-only runs fetch the title and body from the current repository and do not require or update a Supabase automation record. The workflow then:
 
 1. Checks out `main` and installs the locked dependencies.
-2. Creates a GitHub issue to record the request.
+2. Creates a GitHub issue for a Wahl thought, or reuses and validates the supplied issue for an issue-only run.
 3. Runs Codex in an ephemeral session under the constraints in `AGENTS.md`.
 4. Builds the site to validate the proposed change.
 5. If files changed, creates a `codex/wahl-fix-<request-id>` branch and opens a pull request that references the issue.
 6. Reports the final result and pull-request URL back to Supabase.
 
-The automation record supports `queued`, `working`, `pr_ready`, `no_change`, `failed`, and `closed` states. The wall checks Supabase every ten seconds while work is active, and **View progress** opens the latest status inside Wahl with a manual refresh fallback. A successful run links to its review pull request; a no-change or failed run displays an explicit outcome. If initial dispatch fails, Wahl removes the optimistic sent state from the page and displays the error so the owner can retry. An expired session requires signing in again.
+The automation record supports `queued`, `working`, `pr_ready`, `no_change`, `failed`, and `closed` states. The wall checks Supabase every ten seconds while work is active, and **View progress** opens the latest status inside Wahl with a manual refresh fallback. A successful run links to its review pull request; a no-change or failed run displays an explicit outcome. If initial dispatch fails, Wahl removes the optimistic sent state from the page and displays the error so the owner can retry. An expired session requires signing in again. Issue-only runs report through GitHub Actions, the issue, and the resulting pull request rather than through Wahl's per-post progress UI.
+
+To run an existing issue, open **Actions → Turn a Wahl thought into a pull request → Run workflow**, enter its number in `issue_number`, and leave `request_id`, `post_id`, and `thought` empty. GitHub restricts manual workflow dispatch to users with write access. The issue must be open and belong to this repository. Its content remains untrusted task input, and the workflow never merges or deploys the result.
 
 ### Automation configuration
 
