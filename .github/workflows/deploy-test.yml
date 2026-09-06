@@ -71,7 +71,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          RAW_SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          RAW_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
         run: |
           project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
           printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
@@ -80,7 +80,7 @@ jobs:
       - name: Deploy Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          RAW_SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          RAW_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
         run: |
           project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
           printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
