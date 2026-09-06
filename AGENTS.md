@@ -146,6 +146,15 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 
 ## Validation and deployment
 
+### Test-deployment runbook
+
+- Configure the GitHub environment named `test` exactly once. Store `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` as environment **secrets**. Store `SUPABASE_PROJECT_REF`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY` as environment **variables**. The Wahl project reference is `rzmgyvkvfjbcsxegafko`. Never substitute `SUPABASE_DB_URL` for the database password.
+- `SUPABASE_DB_PASSWORD` is the database password from Supabase **Connect → Shared pooler**, not the Supabase account password, API access token, publishable key, or service-role key. If it is reset, update this one GitHub environment secret.
+- GitHub-hosted runners are IPv4-only for this path, while Supabase's direct database hostname is IPv6 by default. In CI, run `supabase link --project-ref "$project_ref"` with `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` set, then run `supabase db push`. Do not replace this with an unlinked `supabase db push --project-ref ...`; that selects the unreachable direct endpoint.
+- Deploy an open review pull request from **Actions → Deploy Wahl test backend → Run workflow**, or run `gh workflow run deploy-test.yml --repo dericg/wahl --ref main -f pull_request_number=<PR>`. The workflow validates the open PR and exact head commit, runs tests/build, applies migrations, deploys Edge Functions, publishes GitHub Pages, and comments the URL on the PR.
+- On failure, inspect the failed step before changing credentials: `RAW_SUPABASE_PROJECT_REF` empty means the workflow used the wrong GitHub variable context or the variable is missing; `IPv6 is not supported` means the project was not linked before `db push`; password/SASL authentication errors mean `SUPABASE_DB_PASSWORD` is wrong or stale. Fix only that cause, then rerun the same PR number. Do not create a duplicate issue or PR.
+- A successful test deployment must complete `validate`, `deploy`, and `deploy-pages`. If migrations fail, Edge Functions and Pages are intentionally skipped; the changes are not available for browser review yet.
+
 Before handing off a code change:
 
 1. Run `npm test` when behavior or automation logic changed.
