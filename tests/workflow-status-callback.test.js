@@ -52,4 +52,5 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
   assert.match(testDeployment, /actions\/upload-pages-artifact@v3/);
   assert.match(testDeployment, /actions\/deploy-pages@v4/);
   assert.match(testDeployment, /WAHL_BASE_PATH: \/wahl\//);
+  assert.match(testDeployment, /gh pr comment "\$PR" --repo "\$GITHUB_REPOSITORY"/);
 });
