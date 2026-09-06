@@ -411,13 +411,7 @@ export default function App() {
         {hasMore && <button className="load-older" type="button" aria-disabled={olderLoading} onClick={() => loadOlder()}>{olderLoading ? "Loading older…" : "Load older"}</button>}
         <span className="feed-status" role="status">{olderLoading ? "Loading entries…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded${!hasMore && !loading ? ". All available entries loaded." : "."}`}</span>
       </section>
-      <footer className="minimal-footer"><nav aria-label="Site information"><a href="#about">About</a><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p></footer>
-      <section className="about-wall" id="about" aria-labelledby="about-heading" tabIndex={-1}>
-        <h2 id="about-heading">About Wahl</h2>
-        <p>Wahl is Deric Garza’s intentionally small personal wall: a quiet place for short thoughts, observations, and things worth keeping. A home for thoughts that would have been a status update.</p>
-        <p>Published thoughts and the project’s GitHub activity share one feed, newest first. Visitors can read along; only the owner can write on the wall or see private thoughts. The experience stays simple, warm, and focused on the words.</p>
-        <p className="about-sources">More about the project in its <a href="https://github.com/dericg/wahl/blob/main/README.md">README</a> and <a href="https://github.com/dericg/wahl/blob/main/AGENTS.md">project principles</a>.</p>
-      </section>
+      <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p></footer>
     </div></main>
   );
 }
