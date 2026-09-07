@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityPayloads, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
+import { activityHighlights, activityPayloads, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
 import { normalizeActivity, validateActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 
 const repository = { full_name: "dericg/wahl" };
@@ -66,6 +66,20 @@ test("combined summary counts event kinds without inventing lifecycle outcomes",
     { kind: "Commit" }, { kind: "Issue", summary: "closed #43" },
     { kind: "Pull request" }, { kind: "Deployment" }, { kind: "Workflow" },
   ]), "2 commits · 2 issue updates · 1 pull request update · 1 deployment update · 1 workflow result");
+});
+
+test("work highlights surface up to three distinct changes ahead of workflow noise", () => {
+  const workflow = { kind: "Workflow", summary: "Validate Wahl · success" };
+  const commit = { kind: "Commit", summary: "Keep the header visible" };
+  const pull = { kind: "Pull request", summary: "opened #44 · Group repository updates" };
+  const issue = { kind: "Issue", summary: "open #43 · Summarize work" };
+  const older = { kind: "Commit", summary: "Improve spacing" };
+  const activities = [workflow, commit, { ...commit }, pull, issue, older];
+  const original = structuredClone(activities);
+  assert.deepEqual(activityHighlights(activities), [commit, pull, issue]);
+  assert.deepEqual(activities, original);
+  assert.deepEqual(activityHighlights([workflow, workflow]), [workflow]);
+  assert.deepEqual(activityHighlights([]), []);
 });
 
 test("issues filter returns one entry per issue", () => {

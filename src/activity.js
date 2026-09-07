@@ -80,6 +80,17 @@ export function summarizeActivity(activities) {
   }).join(" · ");
 }
 
+export function activityHighlights(activities) {
+  const work = activities.filter((activity) => ["Commit", "Pull request", "Issue"].includes(activity.kind));
+  const seen = new Set();
+  return (work.length ? work : activities).filter((activity) => {
+    const identity = `${activity.kind}\u0000${activity.summary}`;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  }).slice(0, 3);
+}
+
 export function filterWallEntries(entries, filter) {
   if (filter === "issues") {
     const issues = entries.filter((entry) => entry.entry_type === "activity" && entry.kind === "Issue")

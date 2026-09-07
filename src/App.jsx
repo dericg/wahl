@@ -6,7 +6,7 @@ import ThoughtEditor from "./ThoughtEditor";
 import PullRequestReview from "./PullRequestReview";
 import { draftDetails, FormattedText } from "./formattedText";
 import { fixPresentation, hasActiveFix } from "./fixStatus";
-import { filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
+import { activityHighlights, filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
 import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
 
@@ -75,7 +75,12 @@ function ActivityGroup({ activities, now }) {
         <span className="activity-kind">{activities.length} updates</span>
       </header>
       <p>{summarizeActivity(activities)}</p>
-      <p className="activity-latest">Latest: <a href={latest.url} target="_blank" rel="noreferrer">{latest.summary}</a></p>
+      <div className="activity-work-summary">
+        <p>Work summary</p>
+        <ul aria-label="Work summary">{activityHighlights(activities).map((activity) => <li key={activity.id}>
+          <span>{activity.kind}: </span><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a>
+        </li>)}</ul>
+      </div>
       <details className="activity-details">
         <summary>View {activities.length} updates</summary>
         <ol>{activities.map((activity) => <li key={activity.id}>

@@ -59,7 +59,10 @@ main { overflow: clip; }
 .activity-card a { color: var(--muted); text-decoration: none; }
 .activity-card a:hover { color: var(--ink); text-decoration: underline; }
 .activity-card a:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
-.activity-group > .activity-latest { color: var(--muted); font-size: 13px; }
+.activity-work-summary { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.activity-work-summary > p { margin: 0 0 6px; font: inherit; }
+.activity-work-summary ul { margin: 0; padding-left: 18px; }
+.activity-work-summary li + li { margin-top: 4px; }
 .activity-details { margin-top: 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .activity-details > summary { width: fit-content; padding: 6px 0; cursor: pointer; }
 .activity-details > summary:hover { color: var(--ink); }

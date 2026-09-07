@@ -57,7 +57,12 @@ test("owner preview and public cards expose exact and relative semantic time", a
       if (grouped) {
         assert.match(html, /aria-label="2 updates from GitHub"/);
         assert.match(html, /<p>2 commits<\/p>/);
-        assert.match(html, /Latest: <a[^>]+>A small update<\/a>/);
+        const workSummary = html.match(/<div class="activity-work-summary">([\s\S]*?)<\/div>/)?.[1];
+        assert.ok(workSummary);
+        assert.match(workSummary, /<p>Work summary<\/p>/);
+        assert.match(workSummary, /<ul aria-label="Work summary">/);
+        assert.match(workSummary, /<a[^>]+>A small update<\/a>/);
+        assert.match(workSummary, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
         assert.match(html, /<details class="activity-details"><summary>View 2 updates<\/summary>/);
         assert.doesNotMatch(html, /<details[^>]*\bopen\b|<script>/);
         assert.match(html, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
