@@ -19,6 +19,17 @@ test("activity merges by source and remains newest first", () => {
   assert.deepEqual(mergeActivity(remote, [{ hash: "abcdef1", date: occurredAt, message: "Commit" }]).map((entry) => entry.source_id), ["issue:6:snapshot", "commit:abcdef1"]);
 });
 
+test("generic publishing lifecycle records remain stored but stay off the public wall", () => {
+  const generic = deployment(10, "success", 20);
+  const detailed = {
+    ...generic,
+    source_id: "test-deployment:123",
+    summary: "github-pages · success · #44 · Explain deployed changes",
+    url: "https://github.com/dericg/wahl/pull/44",
+  };
+  assert.deepEqual(mergeActivity([generic, detailed]), [detailed]);
+});
+
 test("thoughts and GitHub events form one chronological wall feed", () => {
   const posts = [{ id: "thought", text: "A thought", created_at: "2026-09-05T19:00:00Z" }];
   const activity = [{ source_id: "issue:6", kind: "Issue", summary: "Issue", url: "https://github.com/dericg/wahl/issues/6", occurred_at: "2026-09-05T20:00:00Z" }];
@@ -65,8 +76,8 @@ test("combined summary counts event kinds without inventing lifecycle outcomes",
     { kind: "Commit" }, { kind: "Issue", summary: "open #43" },
     { kind: "Commit" }, { kind: "Issue", summary: "closed #43" },
     { kind: "Pull request" }, { kind: "Deployment" }, { kind: "Workflow" },
-  ]), "2 saved code changes · 2 request updates · 1 proposed change update · 1 publishing attempt · 1 work update");
-  assert.equal(summarizeActivity([{ kind: "Commit" }, { kind: "Other" }]), "1 saved code change · 1 update");
+  ]), "2 changes to Wahl · 2 ideas or improvements · 1 change being reviewed · 1 new test version · 1 update");
+  assert.equal(summarizeActivity([{ kind: "Commit" }, { kind: "Other" }]), "1 change to Wahl · 1 update");
   assert.equal(summarizeActivity([]), "");
 });
 
@@ -84,7 +95,7 @@ test("one publishing attempt counts once and keeps only its final result in high
   const original = structuredClone(entries);
   assert.deepEqual(activityOutcomes(entries), [success]);
   assert.deepEqual(activityHighlights(entries), [success]);
-  assert.equal(summarizeActivity(entries), "1 publishing attempt");
+  assert.equal(summarizeActivity(entries), "1 new test version");
   assert.equal(activityWorkSummary(success), "A new test version of Wahl is ready. It includes the proposed changes and can now be reviewed.");
   assert.deepEqual(entries, original);
   // A later snapshot or late progress record must not erase the final result.
@@ -111,7 +122,7 @@ test("unfinished work has one highlight and nothing new to review", () => {
   const pending = deployment(10, "in_progress", 20);
   const entries = [pending, deployment(10, "queued", 19), deployment(10, "requested", 18)];
   assert.deepEqual(activityHighlights(entries), [pending]);
-  assert.equal(summarizeActivity(entries), "1 publishing attempt");
+  assert.equal(summarizeActivity(entries), "1 new test version");
   for (const state of ["requested", "queued", "pending", "in_progress"]) {
     assert.equal(activityWorkSummary(deployment(10, state, 20)), "A new version of Wahl is still being prepared. Nothing new is ready to review from this attempt yet.");
   }
@@ -123,9 +134,9 @@ test("separate attempts are not combined by shared URLs, titles or timestamps", 
   const unknown = { ...deployment(12, "pending", 19), source_id: "legacy" };
   const entries = [first, second, unknown, deployment(10, "queued", 18)];
   assert.deepEqual(activityOutcomes(entries), [first, second, unknown]);
-  assert.equal(summarizeActivity(entries), "3 publishing attempts");
+  assert.equal(summarizeActivity(entries), "3 new test versions");
   assert.deepEqual(activityHighlights(entries), [first, second, unknown]);
-  assert.equal(mergeActivity(entries).length, 4);
+  assert.equal(mergeActivity(entries).length, 0);
 });
 
 test("loading older stages preserves raw order, group identity, and the final outcome", () => {
@@ -149,12 +160,12 @@ test("service preparation and unknown targets never imply a published test or pr
 
 test("request and proposed-change titles name the work without claiming the title is true", () => {
   const cases = [
-    ["Issue", "open #43 · Fix the feed", "Request #43 is open. It tracks a problem or idea for Deric to consider. Title: “Fix the feed”."],
-    ["Issue", "closed #43 · Fix the feed", "Request #43 was closed. The record does not say whether the problem was fixed. Title: “Fix the feed”."],
-    ["Pull request", "opened #44 · Group updates", "Proposed change #44 is ready for Deric to review. It has not been accepted yet. Title: “Group updates”."],
-    ["Pull request", "merged #44 · Group updates", "Proposed change #44 was accepted. The change is now part of Wahl's code. This does not mean it is available on the website yet. Title: “Group updates”."],
-    ["Pull request", "closed #44 · Group updates", "Proposed change #44 was closed without being accepted. Wahl did not add this proposed change to its code. Title: “Group updates”."],
-    ["Pull request", "synchronize #44 · Group updates", "Proposed change #44 was updated for review. The notes do not confirm acceptance or a change to the website. Title: “Group updates”."],
+    ["Issue", "open #43 · Fix the feed", "Deric plans to work on “Fix the feed”. No change has been made yet."],
+    ["Issue", "closed #43 · Fix the feed", "Deric finished considering “Fix the feed”. This note alone does not say whether it became part of Wahl."],
+    ["Pull request", "opened #44 · Group updates", "Deric prepared this change: “Group updates”. He is reviewing it before making it part of Wahl."],
+    ["Pull request", "merged #44 · Group updates", "Deric accepted this change: “Group updates”. It is now part of Wahl and will appear when that version is published."],
+    ["Pull request", "closed #44 · Group updates", "Deric decided not to add this change: “Group updates”."],
+    ["Pull request", "synchronize #44 · Group updates", "Deric revised this proposed change: “Group updates”. It is still being reviewed."],
   ];
   for (const [kind, summary, expected] of cases) {
     const activity = { kind, summary };
@@ -162,6 +173,14 @@ test("request and proposed-change titles name the work without claiming the titl
     assert.equal(activityWorkSummary(activity), expected);
     assert.deepEqual(activity, original);
   }
+});
+
+test("a published test version explains which proposed change it contains", () => {
+  const activity = {
+    kind: "Deployment",
+    summary: "github-pages · success · #44 · Make site updates easier to understand",
+  };
+  assert.equal(activityWorkSummary(activity), "Deric published a new test version of Wahl. It includes proposed change #44: “Make site updates easier to understand”. It is ready to try.");
 });
 
 test("automatic tasks explain proven work and do not infer a fix or unrelated title", () => {
@@ -200,7 +219,7 @@ test("all work explanations reject vague process language, including incomplete 
   assert.equal(summarizeActivity([
     { kind: "Workflow", summary: "Validate Wahl · failure" },
     { kind: "Workflow", summary: "Turn a Wahl thought into a pull request · success" },
-  ]), "1 code check · 1 attempt to prepare a requested change");
+  ]), "1 update · 1 update");
 });
 
 test("unknown states and untrusted titles cannot choose a successful outcome", () => {
@@ -211,9 +230,9 @@ test("unknown states and untrusted titles cannot choose a successful outcome", (
   }
   const title = '<img src=x onerror=alert(1)> · merged #44 · success';
   const activity = { kind: "Issue", summary: `open #43 · ${title}` };
-  assert.equal(activityWorkSummary(activity), `Request #43 is open. It tracks a problem or idea for Deric to consider. Title: “${title}”.`);
+  assert.equal(activityWorkSummary(activity), `Deric plans to work on “${title}”. No change has been made yet.`);
   const long = activityWorkSummary({ kind: "Pull request", summary: `opened #44 · \u202e${"😀".repeat(400)}\n` });
-  assert.equal(Array.from(long.match(/Title: “(.*)”/)[1]).length, 161);
+  assert.equal(Array.from(long.match(/change: “(.*)”/)[1]).length, 181);
   assert.doesNotMatch(long, /\u202e|\n|\ufffd/);
   for (const state of ["unknown", "constructor", "__proto__"]) {
     assert.match(activityWorkSummary({ kind: "Deployment", summary: `test · ${state}` }), /outcome is missing or unclear/);
@@ -247,18 +266,18 @@ test("issues filter returns one entry per issue", () => {
   assert.equal(filterWallEntries(entries, "all"), entries);
 });
 
-test("GitHub events normalize without trusting deployment target URLs", () => {
+test("GitHub events normalize and generic deployment noise is ignored", () => {
   const issue = activityPayloads("issues", { repository, action: "opened", issue: { number: 6, title: "Activity", html_url: "https://github.com/dericg/wahl/issues/6", updated_at: occurredAt } });
   assert.equal(issue[0].summary, "open #6 · Activity");
   const deployment = activityPayloads("deployment_status", { repository, deployment: { id: 2, environment: "Production" }, deployment_status: { id: 3, state: "success", target_url: "https://evil.example", created_at: occurredAt } });
-  assert.equal(deployment[0].url, "https://github.com/dericg/wahl/deployments");
+  assert.deepEqual(deployment, []);
   assert.deepEqual(activityPayloads("issues", { repository: { full_name: "other/repo" } }), []);
   assert.equal(Array.from(activityPayloads("push", { repository, ref: "refs/heads/main", commits: [{ id: "a".repeat(40), message: "x".repeat(400), timestamp: occurredAt }] })[0].summary).length, 320);
 });
 
-test("manual snapshots include every requested activity kind", () => {
+test("manual snapshots omit generic deployments that cannot explain what changed", () => {
   const entries = snapshotActivity({ commits: [{ sha: "abcdef1", html_url: "https://github.com/dericg/wahl/commit/abcdef1", commit: { message: "Commit", committer: { date: occurredAt } } }], issues: [{ number: 6, state: "open", title: "Issue", html_url: "https://github.com/dericg/wahl/issues/6", updated_at: occurredAt }], pulls: [{ number: 13, state: "closed", merged_at: occurredAt, updated_at: occurredAt, title: "PR", html_url: "https://github.com/dericg/wahl/pull/13" }], deployments: [{ id: 4, environment: "Production", created_at: occurredAt }], runs: [{ id: 5, run_attempt: 1, name: "Validate Wahl", status: "completed", conclusion: "success", html_url: "https://github.com/dericg/wahl/actions/runs/5", updated_at: occurredAt }] });
-  assert.deepEqual(new Set(entries.map((entry) => entry.kind)), new Set(["Commit", "Issue", "Pull request", "Deployment", "Workflow"]));
+  assert.deepEqual(new Set(entries.map((entry) => entry.kind)), new Set(["Commit", "Issue", "Pull request", "Workflow"]));
 });
 
 test("activity callback policy accepts only bounded Wahl records", () => {
@@ -311,5 +330,5 @@ test("display reconciles legacy workflow attempts and hides unfinished records",
   const newest = { ...old, source_id: "workflow:42:2", summary: "Validate Wahl · success", occurred_at: "2026-09-06T18:00:00Z" };
   const progress = { ...newest, source_id: "workflow:42:3", summary: "Validate Wahl · in_progress" };
   const noise = { ...newest, source_id: "workflow:43", summary: "Record Wahl repository activity · success" };
-  assert.deepEqual(mergeActivity([newest, progress, noise, old]), [newest]);
+  assert.deepEqual(mergeActivity([newest, progress, noise, old]), []);
 });

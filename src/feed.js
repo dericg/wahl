@@ -15,6 +15,12 @@ export function feedSource(client, table) {
   return async (cursor, limit) => {
     let query = client.from(table).select(columns)
       .order(date, { ascending: false }).order(id, { ascending: true }).limit(limit);
+    if (!thought) {
+      // Do not let internal automation records consume an entire page before
+      // visitor-facing project notes are reached.
+      query = query.in("kind", ["Commit", "Issue", "Pull request", "Deployment"])
+        .neq("url", "https://github.com/dericg/wahl/deployments");
+    }
     if (cursor) {
       // Quote PostgREST values; activity IDs may contain timestamp punctuation.
       const time = JSON.stringify(cursor[date]);

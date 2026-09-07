@@ -1,4 +1,4 @@
-import { normalizeActivity, publicWorkflow } from "../supabase/functions/_shared/wahl-activity-policy.js";
+import { normalizeActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 import { timestampKey } from "./feed.js";
 
 const repositoryUrl = "https://github.com/dericg/wahl";
@@ -26,7 +26,9 @@ export function releaseActivity(commits = []) {
 
 export function mergeActivity(remote = [], fallbackCommits = []) {
   const entries = [...remote, ...releaseActivity(fallbackCommits)]
-    .filter((entry) => validDate(entry.occurred_at) && (entry.kind !== "Workflow" || publicWorkflow(entry.summary)));
+    .filter((entry) => validDate(entry.occurred_at)
+      && ["Commit", "Issue", "Pull request", "Deployment"].includes(entry.kind)
+      && !(entry.kind === "Deployment" && entry.url === `${repositoryUrl}/deployments`));
   const byIdentity = new Map();
   for (const entry of entries) {
     const identity = entry.kind === "Workflow" ? entry.url.replace(/\/attempts\/\d+$/, "")
@@ -67,8 +69,13 @@ export function groupConsecutiveActivity(entries) {
 
 function publishingRecord(activity) {
   if (activity.kind !== "Deployment") return null;
-  const match = /^([^·]+) · (\w+)$/.exec(String(activity.summary || ""));
-  return match ? { site: match[1].trim().toLowerCase(), state: match[2] } : null;
+  const match = /^([^·]+) · (\w+)(?: · #(\d+) · ([\s\S]+))?$/.exec(String(activity.summary || ""));
+  return match ? {
+    site: match[1].trim().toLowerCase(),
+    state: match[2],
+    pullNumber: match[3],
+    title: match[4]?.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim(),
+  } : null;
 }
 
 const finalPublishingStates = new Set(["success", "failure", "error", "inactive", "cancelled"]);
@@ -101,13 +108,10 @@ export function activityOutcomes(activities) {
 
 export function summarizeActivity(activities) {
   const labels = {
-    Commit: ["saved code change", "saved code changes"],
-    Issue: ["request update", "request updates"],
-    "Pull request": ["proposed change update", "proposed change updates"],
-    Deployment: ["publishing attempt", "publishing attempts"],
-    checks: ["code check", "code checks"],
-    proposals: ["attempt to prepare a requested change", "attempts to prepare requested changes"],
-    Workflow: ["work update", "work updates"],
+    Commit: ["change to Wahl", "changes to Wahl"],
+    Issue: ["idea or improvement", "ideas or improvements"],
+    "Pull request": ["change being reviewed", "changes being reviewed"],
+    Deployment: ["new test version", "new test versions"],
   };
   const counts = new Map();
   for (const activity of activityOutcomes(activities)) {
@@ -125,35 +129,40 @@ export function summarizeActivity(activities) {
 export function activityWorkSummary(activity) {
   const summary = String(activity.summary || "");
   if (activity.kind === "Commit") {
-    return "A change to Wahl's code was saved. The work can now be reviewed. Saving it does not mean the website has been updated.";
+    const title = summary.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim();
+    const topic = title ? `“${Array.from(title).slice(0, 180).join("")}${Array.from(title).length > 180 ? "…" : ""}”` : "an update to Wahl";
+    return `Deric saved work on ${topic}. It is part of Wahl's code, but this note does not say whether it is on the website yet.`;
   }
   if (["Issue", "Pull request"].includes(activity.kind)) {
     const match = /^(\w+) #(\d+)(?: · ([\s\S]*)|$)/.exec(summary);
     const state = match?.[1];
-    const subject = activity.kind === "Issue" ? "Request" : "Proposed change";
-    const label = `${subject}${match ? ` #${match[2]}` : ""}`;
     // Quote the title as a name, never as evidence of a fix or a publication.
     // React renders this bounded text directly, without HTML or Markdown.
     const title = match?.[3]?.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim();
-    const topic = title ? ` Title: “${Array.from(title).slice(0, 160).join("")}${Array.from(title).length > 160 ? "…" : ""}”.` : "";
+    const topic = title ? `“${Array.from(title).slice(0, 180).join("")}${Array.from(title).length > 180 ? "…" : ""}”` : "an update to Wahl";
     if (activity.kind === "Issue") {
-      if (["open", "opened", "reopened"].includes(state)) return `${label} is open. It tracks a problem or idea for Deric to consider.${topic}`;
-      if (state === "closed") return `${label} was closed. The record does not say whether the problem was fixed.${topic}`;
-      return `${label} was updated. The notes do not say whether it still needs attention or whether anything on Wahl changed.${topic}`;
+      if (["open", "opened", "reopened"].includes(state)) return `Deric plans to work on ${topic}. No change has been made yet.`;
+      if (state === "closed") return `Deric finished considering ${topic}. This note alone does not say whether it became part of Wahl.`;
+      return `Deric updated his plans for ${topic}.`;
     }
-    if (state === "merged") return `${label} was accepted. The change is now part of Wahl's code. This does not mean it is available on the website yet.${topic}`;
-    if (state === "closed") return `${label} was closed without being accepted. Wahl did not add this proposed change to its code.${topic}`;
-    if (["open", "opened", "reopened"].includes(state)) return `${label} is ready for Deric to review. It has not been accepted yet.${topic}`;
-    return `${label} was updated for review. The notes do not confirm acceptance or a change to the website.${topic}`;
+    if (state === "merged") return `Deric accepted this change: ${topic}. It is now part of Wahl and will appear when that version is published.`;
+    if (state === "closed") return `Deric decided not to add this change: ${topic}.`;
+    if (["open", "opened", "reopened"].includes(state)) return `Deric prepared this change: ${topic}. He is reviewing it before making it part of Wahl.`;
+    return `Deric revised this proposed change: ${topic}. It is still being reviewed.`;
   }
   if (activity.kind === "Deployment") {
-    const { site, state } = publishingRecord(activity) || {};
+    const { site, state, pullNumber, title } = publishingRecord(activity) || {};
+    const change = pullNumber && title
+      ? ` It includes proposed change #${pullNumber}: “${Array.from(title).slice(0, 160).join("")}${Array.from(title).length > 160 ? "…" : ""}”.`
+      : "";
     // github-pages proves test publication. The shared test environment also
     // records validation and service preparation, so its success alone cannot.
     const website = site === "github-pages";
     const preparation = site === "test";
     if (state === "success") {
-      if (website) return "A new test version of Wahl is ready. It includes the proposed changes and can now be reviewed.";
+      if (website) return change
+        ? `Deric published a new test version of Wahl.${change} It is ready to try.`
+        : "A new test version of Wahl is ready. It includes the proposed changes and can now be reviewed.";
       if (preparation) return "Wahl finished checking or preparing its test version. This does not confirm that the proposed changes are available to review yet.";
       return "Wahl finished an attempt to publish an update. The notes do not identify the website that received it, so they cannot confirm where readers can see the changes.";
     }
@@ -251,9 +260,9 @@ export function activityPayloads(eventName, payload) {
   }
 
   if (eventName === "deployment_status") {
-    const deployment = payload.deployment;
-    const status = payload.deployment_status;
-    return [{ sourceId: `deployment:${deployment.id}:${status.id}`, kind: "Deployment", summary: `${deployment.environment || "Production"} · ${status.state}`, url: `${repositoryUrl}/deployments`, occurredAt: status.created_at }];
+    // GitHub's generic lifecycle event does not identify the proposed change.
+    // deploy-test.yml records one useful, PR-specific result after publication.
+    return [];
   }
 
   if (eventName === "workflow_run") {
@@ -270,7 +279,7 @@ export function snapshotActivity({ commits = [], issues = [], pulls = [], deploy
   const commitEntries = commits.map((commit) => ({ sourceId: `commit:${commit.sha}`, kind: "Commit", summary: bounded(String(commit.commit?.message || "Repository update").split("\n")[0]), url: commit.html_url, occurredAt: commit.commit?.committer?.date }));
   const issueEntries = issues.filter((issue) => !issue.pull_request).map((issue) => normalizeActivity({ sourceId: `issue:${issue.number}:${issue.state === "closed" ? "closed" : "opened"}:${issue.updated_at}`, kind: "Issue", summary: bounded(`${issue.state} #${issue.number} · ${issue.title}`), url: issue.html_url, occurredAt: issue.updated_at }));
   const pullEntries = pulls.map((pull) => ({ sourceId: `pr:${pull.number}:snapshot:${pull.updated_at}`, kind: "Pull request", summary: bounded(`${pull.merged_at ? "merged" : pull.state} #${pull.number} · ${pull.title}`), url: pull.html_url, occurredAt: pull.merged_at || pull.updated_at }));
-  const deploymentEntries = deployments.map((deployment) => ({ sourceId: `deployment:${deployment.id}:snapshot`, kind: "Deployment", summary: `${deployment.environment || "Production"} · requested`, url: `${repositoryUrl}/deployments`, occurredAt: deployment.created_at }));
+  const deploymentEntries = [];
   const workflowEntries = runs.flatMap((run) => activityPayloads("workflow_run", { repository: { full_name: "dericg/wahl" }, workflow_run: run }));
   return [...commitEntries, ...issueEntries, ...pullEntries, ...deploymentEntries, ...workflowEntries];
 }

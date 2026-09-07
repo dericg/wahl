@@ -99,6 +99,8 @@ test("database queries bound reads and use both cursor columns without changing 
       select(value) { calls.push(["select", value]); return this; },
       order(...args) { calls.push(["order", ...args]); return this; },
       limit(value) { calls.push(["limit", value]); return this; },
+      in(...args) { calls.push(["in", ...args]); return this; },
+      neq(...args) { calls.push(["neq", ...args]); return this; },
       or(value) { calls.push(["or", value]); return this; },
       then(resolve) { return Promise.resolve({ data: [] }).then(resolve); },
     };
@@ -107,6 +109,8 @@ test("database queries bound reads and use both cursor columns without changing 
     await feedSource(client, table)(cursor, 21);
     assert.deepEqual(calls.filter(([method]) => method === "limit"), [["limit", 21]]);
     assert.equal(calls.filter(([method]) => method === "order").length, 2);
+    assert.equal(calls.filter(([method]) => method === "in").length, table === "repository_activity" ? 1 : 0);
+    assert.equal(calls.filter(([method]) => method === "neq").length, table === "repository_activity" ? 1 : 0);
     const filter = calls.find(([method]) => method === "or")[1];
     assert.match(filter, /\.lt\..*,and\(.*\.eq\..*,.*\.gt\./);
     assert.ok(filter.includes(JSON.stringify(table === "posts" ? cursor.id : cursor.source_id)));

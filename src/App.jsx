@@ -77,16 +77,15 @@ export function ActivityGroup({ activities, now }) {
         <div><strong>Wahl</strong><CardTime value={latest.occurred_at} now={now} /></div>
         <span className="activity-kind">{updates}</span>
       </header>
-      <p>{summarizeActivity(activities)}</p>
       <div className="activity-work-summary">
-        <p>Work on this site</p>
+        <p>What Deric is changing</p>
         <ul aria-label="Work summary">{activityHighlights(activities).map((activity) => <li key={activity.id}>
           <a href={activity.url} target="_blank" rel="noreferrer">{activityWorkSummary(activity)}</a>
         </li>)}</ul>
       </div>
       <details className="activity-details">
-        <summary>View details of {count} {count === 1 ? "update" : "updates"}</summary>
-        <p>Each link opens the original notes on GitHub, where Wahl’s code and proposed changes are kept.</p>
+        <summary>See {count === 1 ? "the original note" : `all ${count} original notes`}</summary>
+        <p>These links open Deric’s detailed project notes on GitHub.</p>
         <ol>{outcomes.map((activity) => <li key={activity.id}>
           <div className="post-header"><span className="activity-kind">{summarizeActivity([activity])}</span><CardTime value={activity.occurred_at} now={now} /></div>
           <p><a href={activity.url} target="_blank" rel="noreferrer">{activityWorkSummary(activity)}</a></p>

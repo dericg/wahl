@@ -56,18 +56,15 @@ test("owner preview and public cards expose exact and relative semantic time", a
       assert.match(html, /role="group" aria-label="Filter the wall"/);
       if (grouped) {
         assert.match(html, /aria-label="2 updates about work on this site"/);
-        assert.match(html, /<p>2 saved code changes<\/p>/);
         const workSummary = html.match(/<div class="activity-work-summary">([\s\S]*?)<\/div>/)?.[1];
         assert.ok(workSummary);
-        assert.match(workSummary, /<p>Work on this site<\/p>/);
+        assert.match(workSummary, /<p>What Deric is changing<\/p>/);
         assert.match(workSummary, /<ul aria-label="Work summary">/);
-        assert.match(workSummary, /A change to Wahl&#x27;s code was saved\. The work can now be reviewed\./);
-        assert.doesNotMatch(workSummary, /Commit:|untrusted title|A small update/);
-        assert.match(html, /<details class="activity-details"><summary>View details of 2 updates<\/summary>/);
+        assert.match(workSummary, /Deric saved work on “A small update”/);
+        assert.match(html, /<details class="activity-details"><summary>See all 2 original notes<\/summary>/);
         const details = html.match(/<details class="activity-details">([\s\S]*?)<\/details>/)?.[1];
-        assert.match(details, /Each link opens the original notes on GitHub/);
-        assert.match(details, /<a[^>]+>A change to Wahl&#x27;s code was saved\./);
-        assert.doesNotMatch(details, /untrusted title|A small update/);
+        assert.match(details, /These links open Deric’s detailed project notes on GitHub/);
+        assert.match(details, /<a[^>]+>Deric saved work on/);
         assert.doesNotMatch(html, /<details[^>]*\bopen\b|<script>/);
         for (const hash of ["abcdef1", "abcdef2"]) {
           for (const section of [workSummary, details]) {
@@ -84,13 +81,12 @@ test("owner preview and public cards expose exact and relative semantic time", a
         const outcomeHtml = renderToStaticMarkup(createElement(ActivityGroup, { activities, now: Date.now() }));
         const [main, notes] = outcomeHtml.split('<details class="activity-details">');
         assert.match(main, /aria-label="2 updates about work on this site"/);
-        assert.match(main, /1 publishing attempt · 1 proposed change update/);
         assert.match(main, /A new test version of Wahl is ready. It includes the proposed changes and can now be reviewed/);
-        assert.match(main, /Title: “&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt; · merged · success”/);
-        assert.match(main, /has not been accepted yet/);
+        assert.match(main, /Deric prepared this change: “&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt; · merged · success”/);
+        assert.match(main, /reviewing it before making it part of Wahl/);
         assert.doesNotMatch(main, /in_progress|queued|still underway|<img/);
-        assert.match(notes, /<summary>View details of 2 updates<\/summary>/);
-        assert.match(notes, /A new test version of Wahl is ready[\s\S]*Proposed change #44 is ready/);
+        assert.match(notes, /<summary>See all 2 original notes<\/summary>/);
+        assert.match(notes, /A new test version of Wahl is ready[\s\S]*Deric prepared this change/);
         assert.equal((notes.match(/<li>/g) || []).length, 2);
         assert.doesNotMatch(notes, /github-pages|in_progress|queued|opened #44/);
         assert.doesNotMatch(outcomeHtml, /<details[^>]*\bopen\b|<img|<button|tabindex="-1"/);
