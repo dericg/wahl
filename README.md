@@ -13,6 +13,14 @@ The launch MVP is a single-page personal website backed by Supabase Postgres. Pu
 
 Without Supabase environment variables, the development server runs as an interactive local preview. Production builds without those variables are read-only.
 
+## Private Facebook archive
+
+The signed-in owner can open **Archive** and choose the `your_facebook_activity` folder from an unzipped Facebook data download. Wahl reads supported posts, stories, photos, and videos directly from the selected folder. The archive stays in browser memory: it is not uploaded, copied into the repository, or saved by Wahl, and it must be chosen again after a reload.
+
+The archive view supports text search and year/type filters, loads long histories in bounded groups, and shows locally resolved media. When the selected archive contains memories from the current calendar date, an owner-only **On this day** section appears above the wall. Messenger, payments, Marketplace conversations, support records, device information, and other sensitive or administrative categories are intentionally ignored.
+
+Visible archived links automatically request an owner-only preview from the `link-preview` Edge Function. The function verifies the signed-in Wahl owner, rejects local/private network targets and unsafe redirects, reads a bounded amount of public HTML, and caches titles, descriptions, site names, and image URLs in `link_previews` for 30 days. Public visitors cannot call the function or read the cache. Preview images are requested without a referrer; links that are private, expired, blocked, or no longer publish metadata retain the archive's basic link card.
+
 ## Repository activity
 
 Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. All keeps lifecycle events in chronological order. GitHub issues shows one entry per issue in its newest loaded state, with a count of distinct issues loaded. The wall initially displays up to 20 combined entries; Load older extends the same feed. Counts describe loaded entries, not repository totals. Every card shows relative age and the exact local time, and relative ages refresh while the wall is open. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.

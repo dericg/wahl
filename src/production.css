@@ -87,3 +87,52 @@ main { overflow: clip; }
 .load-older:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .feed-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media(max-width:520px){.header-controls{grid-template-columns:minmax(0,1fr)}.owner-access,.account-controls{justify-content:flex-start}.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}
+.archive-empty { display: grid; justify-items: center; gap: 10px; padding: 34px 22px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); text-align: center; }
+.archive-empty > svg { color: var(--brass); }
+.archive-empty h2 { margin: 0; color: var(--ink); font: italic 600 19px "Fraunces", serif; }
+.archive-empty p { max-width: 420px; margin: 0 0 5px; font-size: 13px; line-height: 1.6; }
+.archive-empty small { font-size: 11px; }
+.archive-error { color: #d8897f; }
+.archive-picker { display: inline-flex; align-items: center; gap: 6px; width: fit-content; border: 1px solid #80652f; border-radius: 99px; padding: 8px 12px; color: #e4bf68; background: var(--brass-soft); font-size: 11px; font-weight: 600; cursor: pointer; }
+.archive-picker:hover { border-color: var(--brass); color: var(--ink); }
+.archive-picker:focus-within { outline: 2px solid var(--brass); outline-offset: 3px; }
+.archive-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.archive-picker.quiet { border-color: transparent; padding: 4px; color: var(--muted); background: transparent; font-size: 10px; }
+.archive-browser { display: flex; flex-direction: column; gap: 13px; }
+.archive-toolbar { position: sticky; top: 8px; z-index: 6; display: grid; gap: 9px; margin: -5px -8px 2px; padding: 10px 8px 11px; border-bottom: 1px solid rgba(81,57,35,.7); background: rgba(19,12,8,.96); backdrop-filter: blur(12px); }
+.archive-summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--muted); font-size: 11px; }
+.archive-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 7px; }
+.archive-search { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: #160e09; }
+.archive-search input { width: 100%; min-width: 0; border: 0; outline: 0; padding: 9px 0; color: var(--ink); background: transparent; font-size: 12px; }
+.archive-controls select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; color: var(--muted); background: #160e09; font-size: 11px; }
+.archive-search:focus-within, .archive-controls select:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.archive-results { margin: -3px 2px 0; color: #77654d; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.archive-grid { display: grid; gap: 13px; }
+.archive-year { grid-column: 1 / -1; margin: 14px 2px 0; color: var(--brass); font: italic 600 24px/1 "Fraunces", serif; }
+.memory-card { overflow: hidden; }
+.memory-card .post-header > time { color: var(--muted); font-size: 11px; }
+.memory-card .memory-media { display: block; width: calc(100% + 34px); max-height: 520px; margin: 14px -17px 0; object-fit: contain; background: #0e0906; }
+.memory-card > p { margin-bottom: 4px; }
+.memory-count { display: inline-flex; align-items: center; gap: 5px; margin-top: 9px; color: var(--muted); font-size: 10px; }
+.memory-link { display: grid; gap: 3px; margin-top: 12px; padding: 11px 12px; border: 1px solid rgba(81,57,35,.8); border-radius: 7px; color: var(--ink); background: rgba(14,9,6,.38); text-decoration: none; overflow-wrap: anywhere; }
+.memory-link.has-image { grid-template-columns: 112px minmax(0,1fr); gap: 12px; padding: 0; overflow: hidden; }
+.memory-link > img { width: 112px; height: 100%; min-height: 96px; object-fit: cover; background: #0e0906; }
+.memory-link-copy { display: grid; align-content: center; gap: 4px; min-width: 0; }
+.memory-link.has-image .memory-link-copy { padding: 10px 11px 10px 0; }
+.memory-link:hover { border-color: #80652f; }
+.memory-link:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.memory-link strong { color: var(--ink); font-size: 13px; line-height: 1.4; }
+.memory-link-copy > span { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 11px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.memory-link small, .memory-place { color: var(--muted); font-size: 10px; }
+.memory-place { display: block; margin-top: 9px; }
+.archive-today { margin-bottom: 14px; border: 1px solid rgba(81,57,35,.7); border-radius: 9px; }
+.archive-today > button { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 11px 13px; border: 0; color: var(--brass); background: transparent; cursor: pointer; }
+.archive-today > button span { display: inline-flex; align-items: center; gap: 7px; font: italic 600 13px "Fraunces", serif; }
+.archive-today > button small { color: var(--muted); font-size: 10px; }
+.archive-today > div { display: grid; gap: 9px; padding: 0 9px 9px; }
+.memory-card.compact { padding: 13px; box-shadow: none; }
+.memory-card.compact .memory-media { width: calc(100% + 26px); margin: 11px -13px 0; max-height: 300px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.archive-active .site-header { position: static; box-shadow: none; }
+@media(min-width:800px){.archive-active .shell{width:min(100%,860px)}.archive-active .site-header,.archive-active>.shell>.personal-note,.archive-active>.shell>.archive-today,.archive-active>.shell>.composer,.archive-active>.shell>.notice{width:550px;margin-left:auto;margin-right:auto}.archive-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.archive-grid .memory-card{height:100%}}
+@media(max-width:520px){.archive-controls{grid-template-columns:1fr 1fr}.archive-search{grid-column:1/-1}.archive-summary{align-items:flex-start}.memory-card .memory-media{width:calc(100% + 28px);margin-left:-14px;margin-right:-14px}}

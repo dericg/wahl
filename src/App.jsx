@@ -9,6 +9,7 @@ import { fixPresentation, hasActiveFix } from "./fixStatus";
 import { activityHighlights, activityOutcomes, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
 import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
+import FacebookArchive, { OnThisDay } from "./FacebookArchive.jsx";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -223,6 +224,7 @@ export default function App() {
   const [now, setNow] = useState(Date.now);
   const [hasMore, setHasMore] = useState(false);
   const [olderLoading, setOlderLoading] = useState(false);
+  const [archiveEntries, setArchiveEntries] = useState([]);
   const pager = useRef(null);
   const loadedPosts = useRef(posts);
   const entries = useMemo(() => wallEntries(posts, activity), [posts, activity]);
@@ -335,6 +337,12 @@ export default function App() {
   }, [posts, owner]);
 
   useEffect(() => {
+    if (owner) return;
+    setArchiveEntries([]);
+    setFeedFilter((current) => current === "archive" ? "all" : current);
+  }, [owner]);
+
+  useEffect(() => {
     if (!supabase || !session || !owner || !hasActiveFix(fixes)) return undefined;
     const interval = window.setInterval(loadFixes, 10_000);
     return () => window.clearInterval(interval);
@@ -421,25 +429,29 @@ export default function App() {
   }
 
   return (
-    <main><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
+    <main className={owner && feedFilter === "archive" ? "archive-active" : ""}><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
       <header className="site-header">
         <div className="header-controls"><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></div>
         <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
       </header>
       <PersonalNote />
+      {owner && <OnThisDay entries={archiveEntries} />}
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
       <section className="feed" aria-label="The Wall">
-        <div className="feed-heading"><span>the wall</span><span>{loading ? "loading…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded`}</span></div>
+        <div className="feed-heading"><span>{feedFilter === "archive" ? "the archive" : "the wall"}</span><span>{feedFilter === "archive" ? `${archiveEntries.length} memories on this device` : loading ? "loading…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded`}</span></div>
         <div className="feed-filters" role="group" aria-label="Filter the wall">
           <button type="button" className={feedFilter === "all" ? "selected" : ""} aria-pressed={feedFilter === "all"} onClick={() => setFeedFilter("all")}>All</button>
           <button type="button" className={feedFilter === "issues" ? "selected" : ""} aria-pressed={feedFilter === "issues"} onClick={() => setFeedFilter("issues")}>GitHub issues</button>
+          {owner && <button type="button" className={feedFilter === "archive" ? "selected" : ""} aria-pressed={feedFilter === "archive"} onClick={() => setFeedFilter("archive")}>Archive</button>}
         </div>
-        {activityUnavailable && <p className="activity-notice" role="status">Some live GitHub activity is unavailable. Recent commits from this build are shown.</p>}
-        {!loading && visibleEntries.length === 0 && <div className="empty-wall">{feedFilter === "issues" ? "No GitHub issues in the loaded entries." : "The wall is quiet for now."}</div>}
-        {displayEntries.map((entry) => entry.entry_type === "activity-group" ? <ActivityGroup key={entry.id} activities={entry.activities} now={now} /> : entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} now={now} /> : <PostCard key={entry.id} post={entry} now={now} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
-        {hasMore && <button className="load-older" type="button" aria-disabled={olderLoading} onClick={() => loadOlder()}>{olderLoading ? "Loading older…" : "Load older"}</button>}
-        <span className="feed-status" role="status">{olderLoading ? "Loading entries…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded${!hasMore && !loading ? ". All available entries loaded." : "."}`}</span>
+        {owner && feedFilter === "archive" ? <FacebookArchive entries={archiveEntries} setEntries={setArchiveEntries} /> : <>
+          {activityUnavailable && <p className="activity-notice" role="status">Some live GitHub activity is unavailable. Recent commits from this build are shown.</p>}
+          {!loading && visibleEntries.length === 0 && <div className="empty-wall">{feedFilter === "issues" ? "No GitHub issues in the loaded entries." : "The wall is quiet for now."}</div>}
+          {displayEntries.map((entry) => entry.entry_type === "activity-group" ? <ActivityGroup key={entry.id} activities={entry.activities} now={now} /> : entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} now={now} /> : <PostCard key={entry.id} post={entry} now={now} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
+          {hasMore && <button className="load-older" type="button" aria-disabled={olderLoading} onClick={() => loadOlder()}>{olderLoading ? "Loading older…" : "Load older"}</button>}
+          <span className="feed-status" role="status">{olderLoading ? "Loading entries…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded${!hasMore && !loading ? ". All available entries loaded." : "."}`}</span>
+        </>}
       </section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p></footer>
     </div></main>
