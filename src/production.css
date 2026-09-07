@@ -59,6 +59,18 @@ main { overflow: clip; }
 .activity-card a { color: var(--muted); text-decoration: none; }
 .activity-card a:hover { color: var(--ink); text-decoration: underline; }
 .activity-card a:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.activity-work-summary { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.activity-work-summary > p { margin: 0 0 6px; font: inherit; }
+.activity-work-summary ul { margin: 0; padding-left: 18px; }
+.activity-work-summary li + li { margin-top: 4px; }
+.activity-details { margin-top: 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.activity-details > summary { width: fit-content; padding: 6px 0; cursor: pointer; }
+.activity-details > summary:hover { color: var(--ink); }
+.activity-details > summary:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.activity-details ol { list-style: none; margin: 8px 0 0; padding: 0; }
+.activity-details li { padding: 12px 0; border-top: 1px solid var(--line); }
+.activity-details li:last-child { padding-bottom: 0; }
+.activity-details li p { margin: 8px 0 0; white-space: pre-wrap; line-height: 1.55; }
 .activity-notice { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .feed-filters { display: flex; gap: 6px; margin: -2px 0 3px; }
 .feed-filters button { border: 1px solid transparent; border-radius: 99px; padding: 5px 9px; background: transparent; color: #806c52; font-size: 10px; cursor: pointer; }

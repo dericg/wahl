@@ -100,6 +100,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.pages.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.pages.outputs.page_url }}
     steps:
       - name: Deploy GitHub Pages
         id: pages
@@ -112,3 +114,33 @@ jobs:
           PAGE_URL: ${{ steps.pages.outputs.page_url }}
         run: |
           gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
+  record-result:
+    needs: [validate, deploy-pages]
+    runs-on: ubuntu-latest
+    environment: test
+    permissions: { contents: read, pull-requests: read }
+    steps:
+      - name: Explain the published change on Wahl
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.validate.outputs.number }}
+          PAGE_URL: ${{ needs.deploy-pages.outputs.page_url }}
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
+        run: |
+          set -euo pipefail
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
+          title="$(jq -r '.title | gsub("[\\u0000-\\u001f\\u007f-\\u009f]"; " ") | .[0:220]' <<< "$pr")"
+          url="$(jq -r '.html_url' <<< "$pr")"
+          body="$(jq -n \
+            --arg sourceId "test-deployment:${GITHUB_RUN_ID}" \
+            --arg summary "github-pages · success · #${PR} · ${title}" \
+            --arg url "$url" \
+            --arg occurredAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{sourceId: $sourceId, kind: "Deployment", summary: $summary, url: $url, occurredAt: $occurredAt}')"
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $STATUS_CALLBACK_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$body" \
+            "$SUPABASE_URL/functions/v1/record-wahl-activity"
