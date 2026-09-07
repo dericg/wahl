@@ -40,7 +40,7 @@ test("owner preview and public cards expose exact and relative semantic time", a
       const entry = result.output.find((item) => item.type === "chunk" && item.isEntry);
       const path = join(directory, `${owner ? "owner" : "public"}-${grouped}.mjs`);
       await writeFile(path, entry.code);
-      const { default: App, ActivityGroup } = await import(pathToFileURL(path));
+      const { default: App, ActivityGroup, ActivityCard } = await import(pathToFileURL(path));
       const html = renderToStaticMarkup(createElement(App));
       const cards = [...html.matchAll(/<article\b[\s\S]*?<\/article>/g)].map(([card]) => card);
       assert.equal(cards.length, owner ? 6 : 1);
@@ -61,15 +61,14 @@ test("owner preview and public cards expose exact and relative semantic time", a
         assert.ok(workSummary);
         assert.match(workSummary, /<p>Work on this site<\/p>/);
         assert.match(workSummary, /<ul aria-label="Work summary">/);
-        assert.match(workSummary, /A change to this site&#x27;s code was saved\. This keeps a record of the work for later review\./);
+        assert.match(workSummary, /A change to Wahl&#x27;s code was saved\. The work can now be reviewed\./);
         assert.doesNotMatch(workSummary, /Commit:|untrusted title|A small update/);
-        assert.match(html, /<details class="activity-details"><summary>View 2 original work notes<\/summary>/);
+        assert.match(html, /<details class="activity-details"><summary>View details of 2 updates<\/summary>/);
         const details = html.match(/<details class="activity-details">([\s\S]*?)<\/details>/)?.[1];
-        assert.match(details, /GitHub, where this site&#x27;s code and work records are kept/);
-        assert.match(details, /<a[^>]+>A small update<\/a>/);
-        assert.match(details, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
+        assert.match(details, /Each link opens the original notes on GitHub/);
+        assert.match(details, /<a[^>]+>A change to Wahl&#x27;s code was saved\./);
+        assert.doesNotMatch(details, /untrusted title|A small update/);
         assert.doesNotMatch(html, /<details[^>]*\bopen\b|<script>/);
-        assert.match(html, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
         for (const hash of ["abcdef1", "abcdef2"]) {
           for (const section of [workSummary, details]) {
             assert.ok(section.includes(`href="https://github.com/dericg/wahl/commit/${hash}" target="_blank" rel="noreferrer"`));
@@ -86,18 +85,47 @@ test("owner preview and public cards expose exact and relative semantic time", a
         const [main, notes] = outcomeHtml.split('<details class="activity-details">');
         assert.match(main, /aria-label="2 updates about work on this site"/);
         assert.match(main, /1 publishing attempt · 1 proposed change update/);
-        assert.match(main, /A new test version of Wahl was published. It is ready for Deric to review/);
+        assert.match(main, /A new test version of Wahl is ready. It includes the proposed changes and can now be reviewed/);
         assert.match(main, /Title: “&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt; · merged · success”/);
         assert.match(main, /has not been accepted yet/);
         assert.doesNotMatch(main, /in_progress|queued|still underway|<img/);
-        assert.match(notes, /<summary>View 4 original work notes<\/summary>/);
-        assert.match(notes, /github-pages · success[\s\S]*opened #44[\s\S]*github-pages · in_progress[\s\S]*github-pages · queued/);
+        assert.match(notes, /<summary>View details of 2 updates<\/summary>/);
+        assert.match(notes, /A new test version of Wahl is ready[\s\S]*Proposed change #44 is ready/);
+        assert.equal((notes.match(/<li>/g) || []).length, 2);
+        assert.doesNotMatch(notes, /github-pages|in_progress|queued|opened #44/);
         assert.doesNotMatch(outcomeHtml, /<details[^>]*\bopen\b|<img|<button|tabindex="-1"/);
         for (const section of [main, notes]) {
           assert.match(section, /href="https:\/\/github.com\/dericg\/wahl\/pull\/44" target="_blank" rel="noreferrer"/);
           assert.match(section, /href="https:\/\/github.com\/dericg\/wahl\/deployments" target="_blank" rel="noreferrer"/);
         }
 
+        // The same event explanation is visible in summaries, expanded details,
+        // and standalone cards. Links retain their destinations and native focus.
+        for (const [state, explanation] of [
+          ["success", /A new test version of Wahl is ready\. It includes the proposed changes and can now be reviewed\./],
+          ["failure", /Wahl could not publish the proposed update\. The previous version is still available\./],
+          ["in_progress", /A new version of Wahl is still being prepared\. Nothing new is ready to review from this attempt yet\./],
+        ]) {
+          const event = { ...activities[0], summary: `github-pages · ${state}` };
+          const group = renderToStaticMarkup(createElement(ActivityGroup, { activities: [event, ...activities.slice(1)], now: Date.now() }));
+          const card = renderToStaticMarkup(createElement(ActivityCard, { activity: event, now: Date.now() }));
+          const sections = [...group.split('<details class="activity-details">'), card];
+          for (const section of sections) {
+            assert.match(section, explanation);
+            assert.doesNotMatch(section, /site publishing step|linked record|automatic task result|which version and site it was for|github-pages|in_progress|queued/i);
+            assert.match(section, /<a href="https:\/\/github.com\/dericg\/wahl\/deployments" target="_blank" rel="noreferrer">(?:A new|Wahl could not)/);
+          }
+        }
+        const unmatched = [
+          activities[0],
+          { ...activities[2], id: "legacy", source_id: "legacy" },
+          { ...activities[3], id: "another-attempt", source_id: "deployment:11:1", summary: "github-pages · failure" },
+        ];
+        const unmatchedHtml = renderToStaticMarkup(createElement(ActivityGroup, { activities: unmatched, now: Date.now() }));
+        const unmatchedDetails = unmatchedHtml.split('<details class="activity-details">')[1];
+        assert.equal((unmatchedDetails.match(/<li>/g) || []).length, 3);
+        assert.match(unmatchedDetails, /A new test version of Wahl is ready[\s\S]*A new version of Wahl is still being prepared[\s\S]*Wahl could not publish the proposed update/);
+        assert.doesNotMatch(unmatchedDetails, /github-pages|in_progress|queued/);
       } else {
         assert.doesNotMatch(html, /activity-details/);
       }

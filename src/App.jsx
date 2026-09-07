@@ -54,21 +54,22 @@ function ReleaseHistory() {
   );
 }
 
-function ActivityCard({ activity, now }) {
+export function ActivityCard({ activity, now }) {
   return (
-    <article className="post-card activity-card" aria-label={`${activity.kind} from GitHub`}>
+    <article className="post-card activity-card" aria-label="Work on Wahl">
       <header className="post-header">
         <div><strong>Wahl</strong><CardTime value={activity.occurred_at} now={now} /></div>
-        <span className="activity-kind">{activity.kind}</span>
+        <span className="activity-kind">{summarizeActivity([activity])}</span>
       </header>
-      <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a></p>
+      <p><a href={activity.url} target="_blank" rel="noreferrer">{activityWorkSummary(activity)}</a></p>
     </article>
   );
 }
 
 export function ActivityGroup({ activities, now }) {
   const latest = activities[0];
-  const count = activityOutcomes(activities).length;
+  const outcomes = activityOutcomes(activities);
+  const count = outcomes.length;
   const updates = `${count} ${count === 1 ? "update" : "updates"}`;
   return (
     <article className="post-card activity-card activity-group" aria-label={`${updates} about work on this site`}>
@@ -84,11 +85,11 @@ export function ActivityGroup({ activities, now }) {
         </li>)}</ul>
       </div>
       <details className="activity-details">
-        <summary>View {activities.length} original work notes</summary>
-        <p>These notes come from GitHub, where this site's code and work records are kept.</p>
-        <ol>{activities.map((activity) => <li key={activity.id}>
+        <summary>View details of {count} {count === 1 ? "update" : "updates"}</summary>
+        <p>Each link opens the original notes on GitHub, where Wahl’s code and proposed changes are kept.</p>
+        <ol>{outcomes.map((activity) => <li key={activity.id}>
           <div className="post-header"><span className="activity-kind">{summarizeActivity([activity])}</span><CardTime value={activity.occurred_at} now={now} /></div>
-          <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a></p>
+          <p><a href={activity.url} target="_blank" rel="noreferrer">{activityWorkSummary(activity)}</a></p>
         </li>)}</ol>
       </details>
     </article>

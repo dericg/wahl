@@ -105,10 +105,17 @@ export function summarizeActivity(activities) {
     Issue: ["request update", "request updates"],
     "Pull request": ["proposed change update", "proposed change updates"],
     Deployment: ["publishing attempt", "publishing attempts"],
-    Workflow: ["automatic task result", "automatic task results"],
+    checks: ["code check", "code checks"],
+    proposals: ["attempt to prepare a requested change", "attempts to prepare requested changes"],
+    Workflow: ["work update", "work updates"],
   };
   const counts = new Map();
-  for (const activity of activityOutcomes(activities)) counts.set(activity.kind, (counts.get(activity.kind) || 0) + 1);
+  for (const activity of activityOutcomes(activities)) {
+    const kind = activity.kind === "Workflow" && activity.summary?.startsWith("Validate Wahl · ") ? "checks"
+      : activity.kind === "Workflow" && activity.summary?.startsWith("Turn a Wahl thought into a pull request · ") ? "proposals"
+        : activity.kind;
+    counts.set(kind, (counts.get(kind) || 0) + 1);
+  }
   return [...counts].map(([kind, count]) => {
     const label = labels[kind] || ["update", "updates"];
     return `${count} ${label[count === 1 ? 0 : 1]}`;
@@ -118,7 +125,7 @@ export function summarizeActivity(activities) {
 export function activityWorkSummary(activity) {
   const summary = String(activity.summary || "");
   if (activity.kind === "Commit") {
-    return "A change to this site's code was saved. This keeps a record of the work for later review.";
+    return "A change to Wahl's code was saved. The work can now be reviewed. Saving it does not mean the website has been updated.";
   }
   if (["Issue", "Pull request"].includes(activity.kind)) {
     const match = /^(\w+) #(\d+)(?: · ([\s\S]*)|$)/.exec(summary);
@@ -132,60 +139,64 @@ export function activityWorkSummary(activity) {
     if (activity.kind === "Issue") {
       if (["open", "opened", "reopened"].includes(state)) return `${label} is open. It tracks a problem or idea for Deric to consider.${topic}`;
       if (state === "closed") return `${label} was closed. The record does not say whether the problem was fixed.${topic}`;
-      return `${label} was updated.${topic}`;
+      return `${label} was updated. The notes do not say whether it still needs attention or whether anything on Wahl changed.${topic}`;
     }
-    if (state === "merged") return `${label} was accepted. It still needs a publishing result to show that readers can see it.${topic}`;
-    if (state === "closed") return `${label} was closed without being accepted.${topic}`;
+    if (state === "merged") return `${label} was accepted. The change is now part of Wahl's code. This does not mean it is available on the website yet.${topic}`;
+    if (state === "closed") return `${label} was closed without being accepted. Wahl did not add this proposed change to its code.${topic}`;
     if (["open", "opened", "reopened"].includes(state)) return `${label} is ready for Deric to review. It has not been accepted yet.${topic}`;
-    return `${label} was updated for review.${topic}`;
+    return `${label} was updated for review. The notes do not confirm acceptance or a change to the website.${topic}`;
   }
   if (activity.kind === "Deployment") {
     const { site, state } = publishingRecord(activity) || {};
-    // In Wahl, github-pages publishes the review website. The test environment
-    // runs checks and updates shared services; its success is not publication.
+    // github-pages proves test publication. The shared test environment also
+    // records validation and service preparation, so its success alone cannot.
     const website = site === "github-pages";
+    const preparation = site === "test";
     if (state === "success") {
-      if (website) return "A new test version of Wahl was published. It is ready for Deric to review.";
-      if (site === "test") return "A step to prepare Wahl's test version finished. This record does not show a new version ready for review yet.";
-      return "A publishing step finished. The record does not show whether a new version of Wahl is ready to view.";
+      if (website) return "A new test version of Wahl is ready. It includes the proposed changes and can now be reviewed.";
+      if (preparation) return "Wahl finished checking or preparing its test version. This does not confirm that the proposed changes are available to review yet.";
+      return "Wahl finished an attempt to publish an update. The notes do not identify the website that received it, so they cannot confirm where readers can see the changes.";
     }
     if (["failure", "error"].includes(state)) {
-      return "Publishing failed. This attempt did not make a new version ready to review. The prior version remains available.";
+      if (preparation) return "Wahl could not finish checking or preparing its test version. This attempt does not confirm that anything new is ready to review. Some preparation may have finished before it stopped.";
+      return "Wahl could not publish the proposed update. The previous version is still available.";
     }
     if (["requested", "queued", "pending", "in_progress"].includes(state)) {
-      return "Work to publish Wahl is still underway. There is nothing new to review yet.";
+      return "A new version of Wahl is still being prepared. Nothing new is ready to review from this attempt yet.";
     }
-    if (state === "cancelled") return "Publishing stopped before it finished. There is nothing new to review from this attempt.";
-    if (state === "inactive") return "This publishing attempt is no longer active. Its record does not show the version now available for review.";
-    return "The publishing result is not clear. Check its notes to see whether a new version is ready to view.";
+    if (state === "cancelled") return "Wahl stopped preparing the proposed update before it finished. This attempt has no new version ready to review.";
+    if (state === "inactive") return "This attempt to publish Wahl is no longer active. The notes do not say whether it was replaced or removed, so they cannot confirm what readers can view now.";
+    return "Wahl recorded an attempt to publish an update, but its outcome is missing or unclear. The notes do not confirm that anything new is ready to review.";
   }
   if (activity.kind === "Workflow") {
     const match = /^([^·]+) · (\w+)$/.exec(summary);
-    const name = match?.[1];
+    const name = match?.[1].trim();
     const state = match?.[2];
     const checks = name === "Validate Wahl";
     const proposal = name === "Turn a Wahl thought into a pull request";
-    const task = checks ? "The automatic check of Wahl" : proposal ? "The automatic task to work on a requested change" : "An automatic task for Wahl";
+    if (!checks && !proposal) return "Wahl recorded work, but the notes do not explain what it tried to do or whether it finished. They cannot confirm a change for readers.";
     if (state === "success") {
-      if (checks) return "Wahl passed its automatic checks. This helps catch problems before Deric reviews the work. It does not mean a new version was published.";
-      // This task can also finish successfully without proposing a change.
-      // Stored workflow records contain no issue/PR link, so do not associate
-      // nearby titles or promise a fix based on a successful run alone.
-      if (proposal) return "The automatic task finished looking into a requested change. It may have prepared work for Deric to review. This record does not say whether it made a change.";
-      return "An automatic task finished. Its record does not say what changed for readers.";
+      if (checks) return "Wahl passed its checks for problems in the code. The work can move on to review. Passing these checks does not publish a new version or prove that every problem is fixed.";
+      // A successful run may finish without preparing a proposal. There is no
+      // stored issue/PR link, so nearby titles cannot prove what it changed.
+      return "Wahl finished trying to prepare a requested change. The notes do not say whether it produced a proposal for Deric to review. They do not confirm a fix or a new website version.";
     }
+    const task = checks ? "checking its code for problems" : "preparing a requested change for Deric to review";
     const outcomes = {
-      failure: "failed. The work needs attention before it can move forward.",
-      cancelled: "stopped early. The work did not finish.",
-      timed_out: "ran out of time. The work did not finish.",
-      action_required: "needs help before the work can move forward.",
-      startup_failure: "could not start. The work needs another try.",
-      queued: "is waiting to start. There is nothing new to review yet.",
-      in_progress: "is still underway. There is nothing new to review yet.",
+      failure: `Wahl could not finish ${task}.`,
+      cancelled: `Wahl stopped ${task} before it finished.`,
+      timed_out: `Wahl ran out of time while ${task}. It did not finish.`,
+      action_required: `Wahl needs help before it can finish ${task}.`,
+      startup_failure: `Wahl could not start ${task}.`,
+      queued: `Wahl is waiting to start ${task}.`,
+      in_progress: `Wahl is still ${task}. It has not finished yet.`,
     };
-    return `${task} ${Object.hasOwn(outcomes, state) ? outcomes[state] : "has no clear result. Its notes may give more detail."}`;
+    const outcome = Object.hasOwn(outcomes, state) ? outcomes[state] : `Wahl tried ${task}, but the notes do not say whether it finished.`;
+    return `${outcome} ${checks
+      ? "These notes do not confirm that the code passed its checks, so it still needs review. This does not confirm any change to the website."
+      : "The notes do not confirm that a proposed change is ready to review. They do not show that the requested problem was fixed."}`;
   }
-  return "Work on this site was recorded. The linked notes give more detail about what happened.";
+  return "Wahl recorded work, but the notes do not explain what it tried to do or whether it finished. They cannot confirm a change for readers.";
 }
 
 export function activityHighlights(activities) {
