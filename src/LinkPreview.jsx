@@ -5,7 +5,7 @@ const requests = new Map();
 
 async function requestPreview(url) {
   if (!isCloudConfigured || !supabase) return null;
-  if (!requests.has(url)) requests.set(url, supabase.functions.invoke("link-preview", { body: { url } })
+  if (!requests.has(url)) requests.set(url, supabase.functions.invoke("dispatch-wahl-fix", { body: { action: "link_preview", url } })
     .then(({ data, error }) => error ? null : data?.preview || null)
     .catch(() => null));
   return requests.get(url);

@@ -19,7 +19,7 @@ The signed-in owner can open **Archive** and choose the `your_facebook_activity`
 
 The archive view supports text search and year/type filters, loads long histories in bounded groups, and shows locally resolved media. When the selected archive contains memories from the current calendar date, an owner-only **On this day** section appears above the wall. Messenger, payments, Marketplace conversations, support records, device information, and other sensitive or administrative categories are intentionally ignored.
 
-Visible archived links automatically request an owner-only preview from the `link-preview` Edge Function. The function verifies the signed-in Wahl owner, rejects local/private network targets and unsafe redirects, reads a bounded amount of public HTML, and caches titles, descriptions, site names, and image URLs in `link_previews` for 30 days. Public visitors cannot call the function or read the cache. Preview images are requested without a referrer; links that are private, expired, blocked, or no longer publish metadata retain the archive's basic link card.
+Visible archived links automatically request an owner-only preview through Wahl's authenticated server function. It verifies the signed-in Wahl owner, rejects local/private network targets and unsafe redirects, reads a bounded amount of public HTML, and caches titles, descriptions, site names, and image URLs in `link_previews` for 30 days. Public visitors cannot request previews or read the cache. Preview images are requested without a referrer; links that are private, expired, blocked, or no longer publish metadata retain the archive's basic link card.
 
 ## Repository activity
 

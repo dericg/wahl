@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { validateFixRequest } from "../_shared/wahl-fix-policy.js";
 import { reviewOrMerge } from "../_shared/wahl-merge.js";
+import { loadLinkPreview } from "../_shared/link-preview.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +26,7 @@ Deno.serve(async (request) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const githubToken = Deno.env.get("WAHL_GITHUB_TOKEN");
-  if (!supabaseUrl || !anonKey || !serviceRoleKey || !githubToken) return json({ error: "Automation is not configured" }, 503);
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) return json({ error: "Wahl services are not configured" }, 503);
 
   const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } } });
   const admin = createClient(supabaseUrl, serviceRoleKey);
@@ -40,7 +41,13 @@ Deno.serve(async (request) => {
   catch { return json({ error: "Invalid request" }, 400); }
   if (!input || typeof input !== "object" || Array.isArray(input)) return json({ error: "Invalid request" }, 400);
   const { postId, action } = input;
-  if (action !== undefined && !["review_pull_request", "merge_pull_request"].includes(action)) return json({ error: "Invalid action" }, 400);
+  if (action !== undefined && !["review_pull_request", "merge_pull_request", "link_preview"].includes(action)) return json({ error: "Invalid action" }, 400);
+  if (action === "link_preview") {
+    if (owner !== true) return json({ error: "Owner access required" }, 403);
+    const result = await loadLinkPreview(admin, input.url);
+    return json(result.error ? { error: result.error } : { preview: result.preview }, result.status || 200);
+  }
+  if (!githubToken) return json({ error: "Automation is not configured" }, 503);
   if (typeof postId !== "string") return json({ error: "A post ID is required" }, 400);
 
   const { data: post, error: postError } = await userClient.from("posts").select("id,author_id,text,audience_type").eq("id", postId).maybeSingle();
