@@ -394,7 +394,10 @@ export default function App() {
     <main><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
       <header className="site-header">
         <div className="header-controls"><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></div>
-        <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
+        <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span><a className="about-link" href="#about" onClick={(event) => {
+          // Keep native anchor navigation clear of the expandable sticky header.
+          document.getElementById("about").style.scrollMarginTop = `${event.currentTarget.closest("header").offsetHeight + 24}px`;
+        }}>About</a></div><p>thoughts, small observations, and things worth keeping</p></div>
       </header>
       <PersonalNote />
       {owner && <Composer onPost={addPost} busy={busy} />}
@@ -410,6 +413,15 @@ export default function App() {
         {visibleEntries.map((entry) => entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} now={now} /> : <PostCard key={entry.id} post={entry} now={now} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
         {hasMore && <button className="load-older" type="button" aria-disabled={olderLoading} onClick={() => loadOlder()}>{olderLoading ? "Loading older…" : "Load older"}</button>}
         <span className="feed-status" role="status">{olderLoading ? "Loading entries…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded${!hasMore && !loading ? ". All available entries loaded." : "."}`}</span>
+      </section>
+      <section id="about" className="about-section" aria-labelledby="about-heading" tabIndex={-1}>
+        <h2 id="about-heading">About Wahl</h2>
+        <p>Wahl is Deric Garza’s intentionally small personal wall: a quiet place for short thoughts, observations, and things worth keeping. A home for thoughts that would have been a status update.</p>
+        <p>Thoughts can be shared with everyone or kept private. Only a signed-in, registered owner can write or delete thoughts and read private entries. Supabase handles sign-in and enforces that privacy in the database itself.</p>
+        <p>Thoughts share one chronological feed, newest first, with public, read-only updates from Wahl’s GitHub repository: issues, pull requests, commits, recorded deployments, and selected workflow results. Each entry shows how long ago it happened and its exact local time; GitHub updates link to their source. Choose All for the full feed or GitHub issues for each issue’s latest loaded state. Load older brings in earlier entries a page at a time, and counts reflect what’s loaded.</p>
+        <p>A small thought can also become a change to Wahl. The owner can write a private thought containing #fix and choose Send to Codex. That request becomes a tracked GitHub issue, and Codex works on a proposed change delivered as a pull request for review. View progress follows the request from queued to working, then links to the proposal or explains a no-change or failed outcome.</p>
+        <p>GitHub Actions runs automated tests and a build, then a separate trusted workflow validates the exact proposed commit and deploys it to a GitHub Pages test site. The pull request records that commit and the review link so the owner can try the change. An owner review comment beginning with /codex revise asks Codex for another pass on the same pull request, keeping the same issue and repeating validation and test deployment.</p>
+        <p>The owner reviews the change and test site before explicitly approving a merge. Before merging, Wahl rechecks validation and the exact commits of both the proposal and main; if either has changed, a fresh review is required. Production publishing needs separate approval. There’s room here for the site to grow thoughtfully, one small change at a time.</p>
       </section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p></footer>
     </div></main>
