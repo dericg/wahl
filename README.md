@@ -2,6 +2,8 @@
 
 A quiet, intentionally small personal wall for thoughts that would have been a status update.
 
+See the [September 2026 site audit](docs/site-audit.md) for source-based findings and focused enhancement suggestions from issue #45.
+
 ## Run locally
 
 ```bash
