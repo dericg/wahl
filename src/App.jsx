@@ -6,7 +6,7 @@ import ThoughtEditor from "./ThoughtEditor";
 import PullRequestReview from "./PullRequestReview";
 import { draftDetails, FormattedText } from "./formattedText";
 import { fixPresentation, hasActiveFix } from "./fixStatus";
-import { filterWallEntries, mergeActivity, wallEntries } from "./activity";
+import { filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
 import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
 
@@ -62,6 +62,27 @@ function ActivityCard({ activity, now }) {
         <span className="activity-kind">{activity.kind}</span>
       </header>
       <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a></p>
+    </article>
+  );
+}
+
+function ActivityGroup({ activities, now }) {
+  const latest = activities[0];
+  return (
+    <article className="post-card activity-card activity-group" aria-label={`${activities.length} updates from GitHub`}>
+      <header className="post-header">
+        <div><strong>Wahl</strong><CardTime value={latest.occurred_at} now={now} /></div>
+        <span className="activity-kind">{activities.length} updates</span>
+      </header>
+      <p>{summarizeActivity(activities)}</p>
+      <p className="activity-latest">Latest: <a href={latest.url} target="_blank" rel="noreferrer">{latest.summary}</a></p>
+      <details className="activity-details">
+        <summary>View {activities.length} updates</summary>
+        <ol>{activities.map((activity) => <li key={activity.id}>
+          <div className="post-header"><span className="activity-kind">{activity.kind}</span><CardTime value={activity.occurred_at} now={now} /></div>
+          <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a></p>
+        </li>)}</ol>
+      </details>
     </article>
   );
 }
@@ -198,6 +219,7 @@ export default function App() {
   const loadedPosts = useRef(posts);
   const entries = useMemo(() => wallEntries(posts, activity), [posts, activity]);
   const visibleEntries = useMemo(() => filterWallEntries(entries, feedFilter), [entries, feedFilter]);
+  const displayEntries = useMemo(() => feedFilter === "all" ? groupConsecutiveActivity(visibleEntries) : visibleEntries, [visibleEntries, feedFilter]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 15_000);
@@ -407,7 +429,7 @@ export default function App() {
         </div>
         {activityUnavailable && <p className="activity-notice" role="status">Some live GitHub activity is unavailable. Recent commits from this build are shown.</p>}
         {!loading && visibleEntries.length === 0 && <div className="empty-wall">{feedFilter === "issues" ? "No GitHub issues in the loaded entries." : "The wall is quiet for now."}</div>}
-        {visibleEntries.map((entry) => entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} now={now} /> : <PostCard key={entry.id} post={entry} now={now} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
+        {displayEntries.map((entry) => entry.entry_type === "activity-group" ? <ActivityGroup key={entry.id} activities={entry.activities} now={now} /> : entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} now={now} /> : <PostCard key={entry.id} post={entry} now={now} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
         {hasMore && <button className="load-older" type="button" aria-disabled={olderLoading} onClick={() => loadOlder()}>{olderLoading ? "Loading older…" : "Load older"}</button>}
         <span className="feed-status" role="status">{olderLoading ? "Loading entries…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded${!hasMore && !loading ? ". All available entries loaded." : "."}`}</span>
       </section>

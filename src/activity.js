@@ -44,6 +44,42 @@ export function wallEntries(posts = [], activity = []) {
   ].sort((left, right) => timestampKey(right.created_at).localeCompare(timestampKey(left.created_at)) || String(left.id).localeCompare(String(right.id)));
 }
 
+export function groupConsecutiveActivity(entries) {
+  const groups = [];
+  for (const entry of entries) {
+    const previous = groups.at(-1);
+    if (entry.entry_type === "activity" && previous?.entry_type === "activity-group") {
+      previous.activities.push(entry);
+    } else if (entry.entry_type === "activity" && previous?.entry_type === "activity") {
+      groups[groups.length - 1] = {
+        id: `group:${previous.id}`,
+        entry_type: "activity-group",
+        created_at: previous.created_at,
+        activities: [previous, entry],
+      };
+    } else {
+      groups.push(entry);
+    }
+  }
+  return groups;
+}
+
+export function summarizeActivity(activities) {
+  const labels = {
+    Commit: ["commit", "commits"],
+    Issue: ["issue update", "issue updates"],
+    "Pull request": ["pull request update", "pull request updates"],
+    Deployment: ["deployment update", "deployment updates"],
+    Workflow: ["workflow result", "workflow results"],
+  };
+  const counts = new Map();
+  for (const activity of activities) counts.set(activity.kind, (counts.get(activity.kind) || 0) + 1);
+  return [...counts].map(([kind, count]) => {
+    const label = labels[kind] || ["update", "updates"];
+    return `${count} ${label[count === 1 ? 0 : 1]}`;
+  }).join(" · ");
+}
+
 export function filterWallEntries(entries, filter) {
   if (filter === "issues") {
     const issues = entries.filter((entry) => entry.entry_type === "activity" && entry.kind === "Issue")

@@ -20,14 +20,17 @@ test("site header remains pinned while the wall scrolls", async () => {
 test("owner preview and public cards expose exact and relative semantic time", async () => {
   const directory = await mkdtemp(join(tmpdir(), "wahl-feed-render-"));
   try {
-    for (const owner of [false, true]) {
+    for (const { owner, grouped } of [{ owner: false, grouped: false }, { owner: true, grouped: false }, { owner: false, grouped: true }, { owner: true, grouped: true }]) {
       const result = await build({
         configFile: false, envFile: false, logLevel: "silent", plugins: [react()],
         define: {
           "import.meta.env.DEV": JSON.stringify(owner),
           "import.meta.env.VITE_SUPABASE_URL": '""',
           "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": '""',
-          __WAHL_RELEASE__: JSON.stringify({ version: "0.2.0", commits: [{ hash: "abcdef1", date: "2026-09-06T00:00:00Z", message: "A small update" }] }),
+          __WAHL_RELEASE__: JSON.stringify({ version: "0.2.0", commits: [
+            { hash: "abcdef1", date: "2026-09-06T00:00:00Z", message: "A small update" },
+            ...(grouped ? [{ hash: "abcdef2", date: "2026-09-06T00:00:00Z", message: "<script>untrusted title</script>" }] : []),
+          ] }),
         },
         build: {
           ssr: fileURLToPath(new URL("../src/App.jsx", import.meta.url)), write: false,
@@ -35,7 +38,7 @@ test("owner preview and public cards expose exact and relative semantic time", a
         },
       });
       const entry = result.output.find((item) => item.type === "chunk" && item.isEntry);
-      const path = join(directory, `${owner ? "owner" : "public"}.mjs`);
+      const path = join(directory, `${owner ? "owner" : "public"}-${grouped}.mjs`);
       await writeFile(path, entry.code);
       const { default: App } = await import(pathToFileURL(path));
       const html = renderToStaticMarkup(createElement(App));
@@ -51,6 +54,20 @@ test("owner preview and public cards expose exact and relative semantic time", a
       assert.equal(html.includes('aria-label="Delete this post"'), owner);
       assert.equal(html.includes("Only me"), owner);
       assert.match(html, /role="group" aria-label="Filter the wall"/);
+      if (grouped) {
+        assert.match(html, /aria-label="2 updates from GitHub"/);
+        assert.match(html, /<p>2 commits<\/p>/);
+        assert.match(html, /Latest: <a[^>]+>A small update<\/a>/);
+        assert.match(html, /<details class="activity-details"><summary>View 2 updates<\/summary>/);
+        assert.doesNotMatch(html, /<details[^>]*\bopen\b|<script>/);
+        assert.match(html, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
+        for (const hash of ["abcdef1", "abcdef2"]) {
+          assert.ok(html.includes(`href="https://github.com/dericg/wahl/commit/${hash}"`));
+        }
+        assert.match(html, new RegExp(`${owner ? 7 : 2} entries loaded`));
+      } else {
+        assert.doesNotMatch(html, /activity-details/);
+      }
     }
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityPayloads, filterWallEntries, mergeActivity, releaseActivity, snapshotActivity, wallEntries } from "../src/activity.js";
+import { activityPayloads, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
 import { normalizeActivity, validateActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 
 const repository = { full_name: "dericg/wahl" };
@@ -25,6 +25,47 @@ test("thoughts and GitHub events form one chronological wall feed", () => {
   const entries = wallEntries(posts, activity);
   assert.deepEqual(entries.map((entry) => entry.entry_type), ["activity", "thought"]);
   assert.equal(entries[0].id, "github:issue:6");
+});
+
+test("only consecutive Wahl entries collapse, preserving thoughts and original order", () => {
+  const activity = Array.from({ length: 5 }, (_, index) => ({
+    source_id: `commit:${index}`, kind: "Commit", summary: `Change ${index}`,
+    occurred_at: `2026-09-05T${20 - index}:00:00Z`,
+  }));
+  const posts = [
+    { id: "public", text: "Wahl", audience_type: "everyone", created_at: "2026-09-05T18:30:00Z" },
+    { id: "private", text: "A private thought", audience_type: "private", created_at: "2026-09-05T16:30:00Z" },
+  ];
+  const entries = wallEntries(posts, activity);
+  const original = structuredClone(entries);
+  const grouped = groupConsecutiveActivity(entries);
+  assert.deepEqual(grouped.map((entry) => entry.entry_type), ["activity-group", "thought", "activity-group", "thought", "activity"]);
+  assert.deepEqual(grouped.flatMap((entry) => entry.activities || [entry]), entries);
+  assert.equal(grouped[0].created_at, entries[0].created_at);
+  assert.deepEqual(entries, original);
+  assert.deepEqual(groupConsecutiveActivity([]), []);
+  assert.deepEqual(groupConsecutiveActivity([entries[0]]), [entries[0]]);
+});
+
+test("loading more entries extends a trailing group without changing its identity", () => {
+  const entries = wallEntries([], releaseActivity([
+    { hash: "abcdef1", date: "2026-09-05T20:00:00Z", message: "Newest" },
+    { hash: "abcdef2", date: "2026-09-05T19:00:00Z", message: "Middle" },
+    { hash: "abcdef3", date: "2026-09-05T18:00:00Z", message: "Oldest" },
+  ]));
+  const firstPage = groupConsecutiveActivity(entries.slice(0, 2));
+  const nextPage = groupConsecutiveActivity(entries);
+  assert.equal(nextPage[0].id, firstPage[0].id);
+  assert.equal(firstPage[0].activities.length, 2);
+  assert.deepEqual(nextPage[0].activities, entries);
+});
+
+test("combined summary counts event kinds without inventing lifecycle outcomes", () => {
+  assert.equal(summarizeActivity([
+    { kind: "Commit" }, { kind: "Issue", summary: "open #43" },
+    { kind: "Commit" }, { kind: "Issue", summary: "closed #43" },
+    { kind: "Pull request" }, { kind: "Deployment" }, { kind: "Workflow" },
+  ]), "2 commits · 2 issue updates · 1 pull request update · 1 deployment update · 1 workflow result");
 });
 
 test("issues filter returns one entry per issue", () => {
