@@ -30,7 +30,8 @@ export function mergeActivity(remote = [], fallbackCommits = []) {
   const byIdentity = new Map();
   for (const entry of entries) {
     const identity = entry.kind === "Workflow" ? entry.url.replace(/\/attempts\/\d+$/, "")
-      : `${entry.kind}\u0000${entry.url}\u0000${timestampKey(entry.occurred_at)}`;
+      : entry.kind === "Deployment" ? entry.source_id
+        : `${entry.kind}\u0000${entry.url}\u0000${timestampKey(entry.occurred_at)}`;
     const previous = byIdentity.get(identity);
     if (!previous || timestampKey(entry.occurred_at) >= timestampKey(previous.occurred_at)) byIdentity.set(identity, entry);
   }
@@ -64,16 +65,50 @@ export function groupConsecutiveActivity(entries) {
   return groups;
 }
 
+function publishingRecord(activity) {
+  if (activity.kind !== "Deployment") return null;
+  const match = /^([^·]+) · (\w+)$/.exec(String(activity.summary || ""));
+  return match ? { site: match[1].trim().toLowerCase(), state: match[2] } : null;
+}
+
+const finalPublishingStates = new Set(["success", "failure", "error", "inactive", "cancelled"]);
+
+export function activityOutcomes(activities) {
+  // Deployment URLs all point to the same page. Only a shared deployment ID
+  // proves that records describe the same attempt; timing and titles do not.
+  const attempts = new Map();
+  for (const activity of activities) {
+    const id = activity.kind === "Deployment" && /^deployment:(\d+):[^:]+$/.exec(activity.source_id || "")?.[1];
+    if (!id) continue;
+    const previous = attempts.get(id);
+    const final = finalPublishingStates.has(publishingRecord(activity)?.state);
+    const previousFinal = finalPublishingStates.has(publishingRecord(previous || {})?.state);
+    const time = validDate(activity.occurred_at) ? timestampKey(activity.occurred_at) : "";
+    const previousTime = validDate(previous?.occurred_at) ? timestampKey(previous.occurred_at) : "";
+    if (!previous || (final && !previousFinal) || (final === previousFinal && time > previousTime)) {
+      attempts.set(id, activity);
+    }
+  }
+  const seen = new Set();
+  return activities.filter((activity) => {
+    const id = activity.kind === "Deployment" && /^deployment:(\d+):[^:]+$/.exec(activity.source_id || "")?.[1];
+    if (!id) return true;
+    if (seen.has(id) || attempts.get(id) !== activity) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 export function summarizeActivity(activities) {
   const labels = {
     Commit: ["saved code change", "saved code changes"],
     Issue: ["request update", "request updates"],
     "Pull request": ["proposed change update", "proposed change updates"],
-    Deployment: ["site publishing update", "site publishing updates"],
+    Deployment: ["publishing attempt", "publishing attempts"],
     Workflow: ["automatic task result", "automatic task results"],
   };
   const counts = new Map();
-  for (const activity of activities) counts.set(activity.kind, (counts.get(activity.kind) || 0) + 1);
+  for (const activity of activityOutcomes(activities)) counts.set(activity.kind, (counts.get(activity.kind) || 0) + 1);
   return [...counts].map(([kind, count]) => {
     const label = labels[kind] || ["update", "updates"];
     return `${count} ${label[count === 1 ? 0 : 1]}`;
@@ -81,64 +116,84 @@ export function summarizeActivity(activities) {
 }
 
 export function activityWorkSummary(activity) {
-  // Describe only recorded outcomes. Titles remain verbatim in the source notes;
-  // they cannot tell us whether a problem was fixed or a change reached readers.
   const summary = String(activity.summary || "");
   if (activity.kind === "Commit") {
     return "A change to this site's code was saved. This keeps a record of the work for later review.";
   }
   if (["Issue", "Pull request"].includes(activity.kind)) {
-    const match = /^(\w+) #(\d+)(?: · |$)/.exec(summary);
+    const match = /^(\w+) #(\d+)(?: · ([\s\S]*)|$)/.exec(summary);
     const state = match?.[1];
     const subject = activity.kind === "Issue" ? "Request" : "Proposed change";
     const label = `${subject}${match ? ` #${match[2]}` : ""}`;
+    // Quote the title as a name, never as evidence of a fix or a publication.
+    // React renders this bounded text directly, without HTML or Markdown.
+    const title = match?.[3]?.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim();
+    const topic = title ? ` Title: “${Array.from(title).slice(0, 160).join("")}${Array.from(title).length > 160 ? "…" : ""}”.` : "";
     if (activity.kind === "Issue") {
-      if (["open", "opened", "reopened"].includes(state)) return `${label} is open. It tracks a problem or idea that still needs a decision.`;
-      if (state === "closed") return `${label} was closed. It is no longer on the open list, but this alone does not mean the problem was fixed.`;
-      return `${label} was updated. The notes help readers follow the problem or idea.`;
+      if (["open", "opened", "reopened"].includes(state)) return `${label} is open. It tracks a problem or idea for Deric to consider.${topic}`;
+      if (state === "closed") return `${label} was closed. The record does not say whether the problem was fixed.${topic}`;
+      return `${label} was updated.${topic}`;
     }
-    if (state === "merged") return `${label} was added to the site's main code. It may still need to be published before readers see it.`;
-    if (state === "closed") return `${label} was closed. This update does not say it was added to the site.`;
-    if (["open", "opened", "reopened"].includes(state)) return `${label} is open for review. Someone can check the work before it is accepted.`;
-    return `${label} was updated. The latest work can be checked before a decision is made.`;
+    if (state === "merged") return `${label} was accepted. It still needs a publishing result to show that readers can see it.${topic}`;
+    if (state === "closed") return `${label} was closed without being accepted.${topic}`;
+    if (["open", "opened", "reopened"].includes(state)) return `${label} is ready for Deric to review. It has not been accepted yet.${topic}`;
+    return `${label} was updated for review.${topic}`;
   }
   if (activity.kind === "Deployment") {
-    const state = summary.split(" · ").at(-1);
-    const outcomes = {
-      success: "A site publishing step finished. The linked record shows which version and site it was for.",
-      failure: "A site publishing step failed. It needs attention before that attempt can finish.",
-      error: "A site publishing step hit an error. It needs attention before that attempt can finish.",
-      requested: "Site publishing was requested. There is no result yet, so this does not show that the site changed.",
-      queued: "Site publishing is waiting to start. There is no result yet to review.",
-      pending: "Site publishing is waiting. There is no result yet to review.",
-      in_progress: "Site publishing has started. It has not finished, so there is no final result yet.",
-      inactive: "An earlier site publishing record is now inactive. It no longer marks an active version of the site.",
-    };
-    return Object.hasOwn(outcomes, state) ? outcomes[state] : "A site publishing record changed. Check its notes to see whether anything is ready to view.";
+    const { site, state } = publishingRecord(activity) || {};
+    // In Wahl, github-pages publishes the review website. The test environment
+    // runs checks and updates shared services; its success is not publication.
+    const website = site === "github-pages";
+    if (state === "success") {
+      if (website) return "A new test version of Wahl was published. It is ready for Deric to review.";
+      if (site === "test") return "A step to prepare Wahl's test version finished. This record does not show a new version ready for review yet.";
+      return "A publishing step finished. The record does not show whether a new version of Wahl is ready to view.";
+    }
+    if (["failure", "error"].includes(state)) {
+      return "Publishing failed. This attempt did not make a new version ready to review. The prior version remains available.";
+    }
+    if (["requested", "queued", "pending", "in_progress"].includes(state)) {
+      return "Work to publish Wahl is still underway. There is nothing new to review yet.";
+    }
+    if (state === "cancelled") return "Publishing stopped before it finished. There is nothing new to review from this attempt.";
+    if (state === "inactive") return "This publishing attempt is no longer active. Its record does not show the version now available for review.";
+    return "The publishing result is not clear. Check its notes to see whether a new version is ready to view.";
   }
   if (activity.kind === "Workflow") {
-    const [name, state] = summary.split(" · ");
-    const task = name === "Validate Wahl" ? "An automatic check of this site's code"
-      : name === "Turn a Wahl thought into a pull request" ? "An automatic task to prepare a proposed site change"
-        : "An automatic task for this site";
+    const match = /^([^·]+) · (\w+)$/.exec(summary);
+    const name = match?.[1];
+    const state = match?.[2];
+    const checks = name === "Validate Wahl";
+    const proposal = name === "Turn a Wahl thought into a pull request";
+    const task = checks ? "The automatic check of Wahl" : proposal ? "The automatic task to work on a requested change" : "An automatic task for Wahl";
+    if (state === "success") {
+      if (checks) return "Wahl passed its automatic checks. This helps catch problems before Deric reviews the work. It does not mean a new version was published.";
+      // This task can also finish successfully without proposing a change.
+      // Stored workflow records contain no issue/PR link, so do not associate
+      // nearby titles or promise a fix based on a successful run alone.
+      if (proposal) return "The automatic task finished looking into a requested change. It may have prepared work for Deric to review. This record does not say whether it made a change.";
+      return "An automatic task finished. Its record does not say what changed for readers.";
+    }
     const outcomes = {
-      success: "finished. This step passed, but it does not mean a change is live on the site.",
-      failure: "reported a failure. The result needs attention before the work can move forward.",
-      cancelled: "stopped early. There is no completed result to rely on.",
-      timed_out: "ran out of time. The work did not finish and may need another try.",
-      action_required: "needs someone's attention. The work cannot move forward on its own.",
-      startup_failure: "could not start. The cause needs to be checked before another try.",
+      failure: "failed. The work needs attention before it can move forward.",
+      cancelled: "stopped early. The work did not finish.",
+      timed_out: "ran out of time. The work did not finish.",
+      action_required: "needs help before the work can move forward.",
+      startup_failure: "could not start. The work needs another try.",
+      queued: "is waiting to start. There is nothing new to review yet.",
+      in_progress: "is still underway. There is nothing new to review yet.",
     };
-    return `${task} ${Object.hasOwn(outcomes, state) ? outcomes[state] : "has a new result. Its notes show what happened and whether more work is needed."}`;
+    return `${task} ${Object.hasOwn(outcomes, state) ? outcomes[state] : "has no clear result. Its notes may give more detail."}`;
   }
   return "Work on this site was recorded. The linked notes give more detail about what happened.";
 }
 
 export function activityHighlights(activities) {
-  const work = activities.filter((activity) => ["Commit", "Pull request", "Issue"].includes(activity.kind));
   const seen = new Set();
-  return (work.length ? work : activities).filter((activity) => {
-    const identity = `${activity.kind}\u0000${activity.summary}`;
+  return activityOutcomes(activities).filter((activity) => {
+    // Separate publishing attempts remain distinct even with identical results.
+    const identity = activity.kind === "Deployment" ? activity
+      : `${activity.kind}\u0000${activity.summary}`;
     if (seen.has(identity)) return false;
     seen.add(identity);
     return true;

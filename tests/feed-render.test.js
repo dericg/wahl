@@ -40,7 +40,7 @@ test("owner preview and public cards expose exact and relative semantic time", a
       const entry = result.output.find((item) => item.type === "chunk" && item.isEntry);
       const path = join(directory, `${owner ? "owner" : "public"}-${grouped}.mjs`);
       await writeFile(path, entry.code);
-      const { default: App } = await import(pathToFileURL(path));
+      const { default: App, ActivityGroup } = await import(pathToFileURL(path));
       const html = renderToStaticMarkup(createElement(App));
       const cards = [...html.matchAll(/<article\b[\s\S]*?<\/article>/g)].map(([card]) => card);
       assert.equal(cards.length, owner ? 6 : 1);
@@ -76,6 +76,28 @@ test("owner preview and public cards expose exact and relative semantic time", a
           }
         }
         assert.match(html, new RegExp(`${owner ? 7 : 2} entries loaded`));
+        const activities = [
+          { source_id: "deployment:10:3", kind: "Deployment", summary: "github-pages · success", url: "https://github.com/dericg/wahl/deployments", occurred_at: "2026-09-06T03:00:00Z" },
+          { source_id: "pr:44:opened", kind: "Pull request", summary: 'opened #44 · <img src=x onerror="alert(1)"> · merged · success', url: "https://github.com/dericg/wahl/pull/44", occurred_at: "2026-09-06T02:00:00Z" },
+          { source_id: "deployment:10:2", kind: "Deployment", summary: "github-pages · in_progress", url: "https://github.com/dericg/wahl/deployments", occurred_at: "2026-09-06T01:00:00Z" },
+          { source_id: "deployment:10:1", kind: "Deployment", summary: "github-pages · queued", url: "https://github.com/dericg/wahl/deployments", occurred_at: "2026-09-06T00:00:00Z" },
+        ].map((activity) => ({ ...activity, id: `github:${activity.source_id}` }));
+        const outcomeHtml = renderToStaticMarkup(createElement(ActivityGroup, { activities, now: Date.now() }));
+        const [main, notes] = outcomeHtml.split('<details class="activity-details">');
+        assert.match(main, /aria-label="2 updates about work on this site"/);
+        assert.match(main, /1 publishing attempt · 1 proposed change update/);
+        assert.match(main, /A new test version of Wahl was published. It is ready for Deric to review/);
+        assert.match(main, /Title: “&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt; · merged · success”/);
+        assert.match(main, /has not been accepted yet/);
+        assert.doesNotMatch(main, /in_progress|queued|still underway|<img/);
+        assert.match(notes, /<summary>View 4 original work notes<\/summary>/);
+        assert.match(notes, /github-pages · success[\s\S]*opened #44[\s\S]*github-pages · in_progress[\s\S]*github-pages · queued/);
+        assert.doesNotMatch(outcomeHtml, /<details[^>]*\bopen\b|<img|<button|tabindex="-1"/);
+        for (const section of [main, notes]) {
+          assert.match(section, /href="https:\/\/github.com\/dericg\/wahl\/pull\/44" target="_blank" rel="noreferrer"/);
+          assert.match(section, /href="https:\/\/github.com\/dericg\/wahl\/deployments" target="_blank" rel="noreferrer"/);
+        }
+
       } else {
         assert.doesNotMatch(html, /activity-details/);
       }

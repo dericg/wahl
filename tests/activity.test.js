@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityHighlights, activityPayloads, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
+import { activityHighlights, activityOutcomes, activityPayloads, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
 import { normalizeActivity, validateActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 
 const repository = { full_name: "dericg/wahl" };
@@ -65,91 +65,148 @@ test("combined summary counts event kinds without inventing lifecycle outcomes",
     { kind: "Commit" }, { kind: "Issue", summary: "open #43" },
     { kind: "Commit" }, { kind: "Issue", summary: "closed #43" },
     { kind: "Pull request" }, { kind: "Deployment" }, { kind: "Workflow" },
-  ]), "2 saved code changes · 2 request updates · 1 proposed change update · 1 site publishing update · 1 automatic task result");
+  ]), "2 saved code changes · 2 request updates · 1 proposed change update · 1 publishing attempt · 1 automatic task result");
   assert.equal(summarizeActivity([{ kind: "Commit" }, { kind: "Other" }]), "1 saved code change · 1 update");
   assert.equal(summarizeActivity([]), "");
 });
 
-test("work summaries explain saved changes and request states without claiming a fix or release", () => {
+function deployment(id, state, hour, site = "github-pages", statusId = state) {
+  return {
+    source_id: `deployment:${id}:${statusId}`, kind: "Deployment",
+    summary: `${site} · ${state}`, url: "https://github.com/dericg/wahl/deployments",
+    occurred_at: `2026-09-05T${hour}:00:00Z`,
+  };
+}
+
+test("one publishing attempt counts once and keeps only its final result in highlights", () => {
+  const success = deployment(10, "success", 20);
+  const entries = [success, deployment(10, "in_progress", 19), deployment(10, "queued", 18), deployment(10, "requested", 17, "github-pages", "snapshot")];
+  const original = structuredClone(entries);
+  assert.deepEqual(activityOutcomes(entries), [success]);
+  assert.deepEqual(activityHighlights(entries), [success]);
+  assert.equal(summarizeActivity(entries), "1 publishing attempt");
+  assert.equal(activityWorkSummary(success), "A new test version of Wahl was published. It is ready for Deric to review.");
+  assert.deepEqual(entries, original);
+  // A later snapshot or late progress record must not erase the final result.
+  assert.deepEqual(activityOutcomes([deployment(10, "requested", 22), ...entries]), [success]);
+  assert.deepEqual(activityOutcomes([...entries].reverse()), [success]);
+});
+
+test("the latest final result wins, including failed retries and inactive versions", () => {
+  const failure = deployment(10, "failure", 21);
+  const success = deployment(10, "success", 20);
+  assert.deepEqual(activityOutcomes([success, failure, deployment(10, "queued", 22)]), [failure]);
+  assert.deepEqual(activityOutcomes([deployment(10, "failure", 19), success]), [success]);
+  const inactive = deployment(10, "inactive", 23);
+  assert.deepEqual(activityOutcomes([inactive, success]), [inactive]);
+  assert.doesNotMatch(activityWorkSummary(inactive), /is ready for Deric/);
+  for (const state of ["failure", "error"]) {
+    const result = deployment(10, state, 20);
+    assert.deepEqual(activityHighlights([result, deployment(10, "in_progress", 19)]), [result]);
+    assert.equal(activityWorkSummary(result), "Publishing failed. This attempt did not make a new version ready to review. The prior version remains available.");
+  }
+});
+
+test("unfinished work has one highlight and nothing new to review", () => {
+  const pending = deployment(10, "in_progress", 20);
+  const entries = [pending, deployment(10, "queued", 19), deployment(10, "requested", 18)];
+  assert.deepEqual(activityHighlights(entries), [pending]);
+  assert.equal(summarizeActivity(entries), "1 publishing attempt");
+  for (const state of ["requested", "queued", "pending", "in_progress"]) {
+    assert.equal(activityWorkSummary(deployment(10, state, 20)), "Work to publish Wahl is still underway. There is nothing new to review yet.");
+  }
+});
+
+test("separate attempts are not combined by shared URLs, titles or timestamps", () => {
+  const first = deployment(10, "success", 20);
+  const second = deployment(11, "success", 20);
+  const unknown = { ...deployment(12, "pending", 19), source_id: "legacy" };
+  const entries = [first, second, unknown, deployment(10, "queued", 18)];
+  assert.deepEqual(activityOutcomes(entries), [first, second, unknown]);
+  assert.equal(summarizeActivity(entries), "3 publishing attempts");
+  assert.deepEqual(activityHighlights(entries), [first, second, unknown]);
+  assert.equal(mergeActivity(entries).length, 4);
+});
+
+test("loading older stages preserves raw order, group identity, and the final outcome", () => {
+  const success = deployment(10, "success", 20);
+  const stages = [deployment(10, "in_progress", 19), deployment(10, "queued", 18)];
+  const first = groupConsecutiveActivity(wallEntries([], [success, stages[0]]))[0];
+  const expanded = groupConsecutiveActivity(wallEntries([], [success, ...stages]))[0];
+  assert.equal(first.id, expanded.id);
+  assert.equal(summarizeActivity(first.activities), summarizeActivity(expanded.activities));
+  assert.deepEqual(activityHighlights(first.activities), activityHighlights(expanded.activities));
+  assert.deepEqual(expanded.activities.map((entry) => entry.source_id), [success, ...stages].map((entry) => entry.source_id));
+});
+
+test("service preparation and unknown targets never imply a published test or production version", () => {
+  for (const site of ["test", "Production", "unknown", "github-pages · success"]) {
+    const text = activityWorkSummary(deployment(10, "success", 20, site));
+    assert.doesNotMatch(text, /was published|is ready for Deric/);
+  }
+  assert.match(activityWorkSummary(deployment(10, "success", 20, "test")), /prepare Wahl's test version finished.*does not show a new version ready/);
+});
+
+test("request and proposed-change titles name the work without claiming the title is true", () => {
   const cases = [
-    ["Commit", "Refactor RLS callback ingestion", "A change to this site's code was saved. This keeps a record of the work for later review."],
-    ["Issue", "open #43 · Fix the feed", "Request #43 is open. It tracks a problem or idea that still needs a decision."],
-    ["Issue", "closed #43 · Fix the feed", "Request #43 was closed. It is no longer on the open list, but this alone does not mean the problem was fixed."],
-    ["Pull request", "opened #44 · Group repository updates", "Proposed change #44 is open for review. Someone can check the work before it is accepted."],
-    ["Pull request", "merged #44 · Group repository updates", "Proposed change #44 was added to the site's main code. It may still need to be published before readers see it."],
-    ["Pull request", "closed #44 · Group repository updates", "Proposed change #44 was closed. This update does not say it was added to the site."],
-    ["Pull request", "synchronize #44 · Group repository updates", "Proposed change #44 was updated. The latest work can be checked before a decision is made."],
+    ["Issue", "open #43 · Fix the feed", "Request #43 is open. It tracks a problem or idea for Deric to consider. Title: “Fix the feed”."],
+    ["Issue", "closed #43 · Fix the feed", "Request #43 was closed. The record does not say whether the problem was fixed. Title: “Fix the feed”."],
+    ["Pull request", "opened #44 · Group updates", "Proposed change #44 is ready for Deric to review. It has not been accepted yet. Title: “Group updates”."],
+    ["Pull request", "merged #44 · Group updates", "Proposed change #44 was accepted. It still needs a publishing result to show that readers can see it. Title: “Group updates”."],
+    ["Pull request", "closed #44 · Group updates", "Proposed change #44 was closed without being accepted. Title: “Group updates”."],
+    ["Pull request", "synchronize #44 · Group updates", "Proposed change #44 was updated for review. Title: “Group updates”."],
   ];
   for (const [kind, summary, expected] of cases) {
-    const activity = { kind, summary, url: "https://github.com/dericg/wahl/pull/44", occurred_at: occurredAt };
+    const activity = { kind, summary };
     const original = structuredClone(activity);
     assert.equal(activityWorkSummary(activity), expected);
     assert.deepEqual(activity, original);
   }
-  for (const state of ["open", "opened", "reopened"]) {
-    assert.match(activityWorkSummary({ kind: "Issue", summary: `${state} #43 · Request` }), /Request #43 is open/);
-    assert.match(activityWorkSummary({ kind: "Pull request", summary: `${state} #44 · Change` }), /Proposed change #44 is open for review/);
-  }
 });
 
-test("publishing and automatic task summaries distinguish success, failure and unfinished work", () => {
-  const publishing = {
-    success: /step finished.*which version and site/,
-    failure: /step failed.*needs attention/,
-    error: /hit an error.*needs attention/,
-    requested: /was requested.*does not show that the site changed/,
-    queued: /waiting to start.*no result yet/,
-    pending: /is waiting.*no result yet/,
-    in_progress: /has started.*has not finished/,
-    inactive: /is now inactive.*no longer marks an active version/,
-  };
-  for (const [state, expected] of Object.entries(publishing)) {
-    for (const site of ["test", "Production"]) {
-      const text = activityWorkSummary({ kind: "Deployment", summary: `${site} · ${state}` });
-      assert.match(text, expected);
-      assert.doesNotMatch(text, /production release|live on the site/);
-    }
-  }
-  const tasks = {
-    success: /finished.*step passed.*does not mean a change is live/,
-    failure: /reported a failure.*needs attention/,
-    cancelled: /stopped early.*no completed result/,
-    timed_out: /ran out of time.*did not finish/,
-    action_required: /needs someone's attention.*cannot move forward/,
-    startup_failure: /could not start.*before another try/,
-  };
-  for (const [state, expected] of Object.entries(tasks)) {
-    for (const name of ["Validate Wahl", "Turn a Wahl thought into a pull request"]) {
+test("automatic tasks explain proven work and do not infer a fix or unrelated title", () => {
+  const check = { kind: "Workflow", summary: "Validate Wahl · success" };
+  const proposal = { kind: "Workflow", summary: "Turn a Wahl thought into a pull request · success" };
+  assert.match(activityWorkSummary(check), /Wahl passed its automatic checks.*does not mean a new version was published/);
+  assert.match(activityWorkSummary(proposal), /finished looking into a requested change.*does not say whether it made a change/);
+  const issue = { kind: "Issue", summary: "open #43 · Fix the feed" };
+  assert.deepEqual(activityHighlights([proposal, issue]), [proposal, issue]);
+  assert.doesNotMatch(activityWorkSummary(proposal), /Fix the feed|#43|fixed|was published/);
+  for (const name of ["Validate Wahl", "Turn a Wahl thought into a pull request"]) {
+    for (const state of ["failure", "cancelled", "timed_out", "action_required", "startup_failure", "queued", "in_progress"]) {
       const text = activityWorkSummary({ kind: "Workflow", summary: `${name} · ${state}` });
-      assert.match(text, expected);
-      assert.doesNotMatch(text, /workflow|pull request|Validate Wahl/);
-      assert.match(text, name === "Validate Wahl" ? /check of this site's code/ : /prepare a proposed site change/);
+      assert.doesNotMatch(text, /passed|was published|fixed|pull request|workflow/);
+      assert.match(text, /needs|did not finish|nothing new to review/);
     }
   }
 });
 
-test("unknown states and untrusted titles do not invent a successful outcome", () => {
+test("unknown states and untrusted titles cannot choose a successful outcome", () => {
   for (const kind of ["Issue", "Pull request", "Deployment", "Workflow", "Other"]) {
     const text = activityWorkSummary({ kind, summary: "<script>merged #44 · success</script>" });
-    assert.doesNotMatch(text, /<script>|#44|was added|step passed|step finished/);
+    assert.doesNotMatch(text, /<script>|#44|was accepted|passed|was published/);
     assert.equal(typeof activityWorkSummary({ kind }), "string");
   }
-  assert.match(activityWorkSummary({ kind: "Issue", summary: "open #43 · merged #44 · success" }), /Request #43 is open/);
+  const title = '<img src=x onerror=alert(1)> · merged #44 · success';
+  const activity = { kind: "Issue", summary: `open #43 · ${title}` };
+  assert.equal(activityWorkSummary(activity), `Request #43 is open. It tracks a problem or idea for Deric to consider. Title: “${title}”.`);
+  const long = activityWorkSummary({ kind: "Pull request", summary: `opened #44 · \u202e${"😀".repeat(400)}\n` });
+  assert.equal(Array.from(long.match(/Title: “(.*)”/)[1]).length, 161);
+  assert.doesNotMatch(long, /\u202e|\n|\ufffd/);
   for (const state of ["unknown", "constructor", "__proto__"]) {
     assert.match(activityWorkSummary({ kind: "Deployment", summary: `test · ${state}` }), /Check its notes/);
-    assert.match(activityWorkSummary({ kind: "Workflow", summary: `New task · ${state}` }), /has a new result/);
+    assert.match(activityWorkSummary({ kind: "Workflow", summary: `New task · ${state}` }), /no clear result/);
   }
 });
 
-test("work highlights surface up to three distinct changes ahead of workflow noise", () => {
+test("highlights include publishing and task outcomes in feed order with at most three items", () => {
   const workflow = { kind: "Workflow", summary: "Validate Wahl · success" };
-  const commit = { kind: "Commit", summary: "Keep the header visible" };
-  const pull = { kind: "Pull request", summary: "opened #44 · Group repository updates" };
+  const published = deployment(10, "success", 20);
+  const pull = { kind: "Pull request", summary: "opened #44 · Group updates" };
   const issue = { kind: "Issue", summary: "open #43 · Summarize work" };
-  const older = { kind: "Commit", summary: "Improve spacing" };
-  const activities = [workflow, commit, { ...commit }, pull, issue, older];
+  const activities = [workflow, published, pull, issue, deployment(10, "queued", 18)];
   const original = structuredClone(activities);
-  assert.deepEqual(activityHighlights(activities), [commit, pull, issue]);
+  assert.deepEqual(activityHighlights(activities), [workflow, published, pull]);
   assert.deepEqual(activities, original);
   assert.deepEqual(activityHighlights([workflow, workflow]), [workflow]);
   assert.deepEqual(activityHighlights([]), []);

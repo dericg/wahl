@@ -6,7 +6,7 @@ import ThoughtEditor from "./ThoughtEditor";
 import PullRequestReview from "./PullRequestReview";
 import { draftDetails, FormattedText } from "./formattedText";
 import { fixPresentation, hasActiveFix } from "./fixStatus";
-import { activityHighlights, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
+import { activityHighlights, activityOutcomes, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
 import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
 
@@ -66,13 +66,15 @@ function ActivityCard({ activity, now }) {
   );
 }
 
-function ActivityGroup({ activities, now }) {
+export function ActivityGroup({ activities, now }) {
   const latest = activities[0];
+  const count = activityOutcomes(activities).length;
+  const updates = `${count} ${count === 1 ? "update" : "updates"}`;
   return (
-    <article className="post-card activity-card activity-group" aria-label={`${activities.length} updates about work on this site`}>
+    <article className="post-card activity-card activity-group" aria-label={`${updates} about work on this site`}>
       <header className="post-header">
         <div><strong>Wahl</strong><CardTime value={latest.occurred_at} now={now} /></div>
-        <span className="activity-kind">{activities.length} updates</span>
+        <span className="activity-kind">{updates}</span>
       </header>
       <p>{summarizeActivity(activities)}</p>
       <div className="activity-work-summary">
