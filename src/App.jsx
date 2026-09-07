@@ -394,7 +394,10 @@ export default function App() {
     <main><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
       <header className="site-header">
         <div className="header-controls"><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} /></div></div>
-        <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
+        <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span><a className="about-link" href="#about" onClick={(event) => {
+          // Keep native anchor navigation clear of the expandable sticky header.
+          document.getElementById("about").style.scrollMarginTop = `${event.currentTarget.closest("header").offsetHeight + 24}px`;
+        }}>About</a></div><p>thoughts, small observations, and things worth keeping</p></div>
       </header>
       <PersonalNote />
       {owner && <Composer onPost={addPost} busy={busy} />}
@@ -410,6 +413,12 @@ export default function App() {
         {visibleEntries.map((entry) => entry.entry_type === "activity" ? <ActivityCard key={entry.id} activity={entry} now={now} /> : <PostCard key={entry.id} post={entry} now={now} owner={owner} onDelete={deletePost} onSendFix={sendFix} onRefreshFix={refreshFix} fix={fixes[entry.id]} />)}
         {hasMore && <button className="load-older" type="button" aria-disabled={olderLoading} onClick={() => loadOlder()}>{olderLoading ? "Loading older…" : "Load older"}</button>}
         <span className="feed-status" role="status">{olderLoading ? "Loading entries…" : `${visibleEntries.length} ${feedFilter === "issues" ? "issues" : "entries"} loaded${!hasMore && !loading ? ". All available entries loaded." : "."}`}</span>
+      </section>
+      <section id="about" className="about-section" aria-labelledby="about-heading" tabIndex={-1}>
+        <h2 id="about-heading">About Wahl</h2>
+        <p>Wahl is Deric Garza’s intentionally small personal wall: a quiet place for short thoughts, observations, and things worth keeping. A home for thoughts that would have been a status update.</p>
+        <p>Public thoughts and updates from Wahl’s GitHub repository share one chronological wall, newest first. Deric can also keep private drafts, visible only to him.</p>
+        <p>Built with React and Supabase, Wahl stays simple on purpose, with room to read and little else.</p>
       </section>
       <footer className="minimal-footer"><nav><a href="mailto:hello@dericgarza.com">Contact</a></nav><p>Wahl is a small place on purpose.</p></footer>
     </div></main>

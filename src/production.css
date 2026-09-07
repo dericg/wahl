@@ -15,6 +15,14 @@
 .empty-wall { text-align: center; padding: 30px; }
 .site-header { position: sticky; top: 0; z-index: 10; padding-top: 1px; background: rgba(19, 12, 8, .96); box-shadow: 0 12px 20px rgba(14, 9, 6, .92); }
 main { overflow: clip; }
+.brand-line { flex-wrap: wrap; }
+.about-link { margin-left: auto; padding: 8px 0 8px 8px; color: var(--muted); font-size: 11px; text-underline-offset: 3px; }
+.about-link:hover { color: var(--ink); }
+.about-link:focus-visible, .about-section:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.about-section { margin-top: 35px; padding-top: 20px; border-top: 1px solid var(--line); scroll-margin-top: 18rem; }
+.about-section h2 { margin: 0 0 12px; color: var(--brass); font: 600 18px "Fraunces", serif; }
+.about-section p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.about-section p:last-child { margin-bottom: 0; }
 .header-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px; margin-bottom: 24px; color: var(--muted); font-size: 10px; }
 .header-controls button:focus-visible, .header-controls input:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .owner-access { display: flex; justify-content: flex-end; min-width: 0; }
