@@ -9,7 +9,7 @@ import { fixPresentation, hasActiveFix } from "./fixStatus";
 import { activityHighlights, activityOutcomes, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
 import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
-import FacebookArchive, { OnThisDay } from "./FacebookArchive.jsx";
+import FacebookArchive from "./FacebookArchive.jsx";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -435,7 +435,6 @@ export default function App() {
         <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
       </header>
       <PersonalNote />
-      {owner && <OnThisDay entries={archiveEntries} />}
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
       <section className="feed" aria-label="The Wall">

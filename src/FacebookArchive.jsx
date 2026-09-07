@@ -36,14 +36,21 @@ export function MemoryCard({ entry, compact = false }) {
 }
 
 export function OnThisDay({ entries }) {
-  const memories = useMemo(() => memoriesOnThisDay(entries).slice(0, 3), [entries]);
-  const [open, setOpen] = useState(false);
+  const memories = useMemo(() => memoriesOnThisDay(entries), [entries]);
+  const [open, setOpen] = useState(true);
+  const [shown, setShown] = useState(6);
   if (!memories.length) return null;
+  const years = new Set(memories.map((entry) => entry.year)).size;
+  const today = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" }).format(new Date());
   return <section className="archive-today">
     <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-      <span><CalendarDays size={14} />On this day</span><small>{memories.length} {memories.length === 1 ? "memory" : "memories"}</small>
+      <span><CalendarDays size={16} />On this day</span><small>{memories.length} {memories.length === 1 ? "memory" : "memories"} from {today}</small>
     </button>
-    {open && <div>{memories.map((entry) => <MemoryCard key={entry.id} entry={entry} compact />)}</div>}
+    {open && <div className="archive-today-content">
+      <p>Looking back across {years} {years === 1 ? "year" : "years"}</p>
+      <div className="archive-today-grid">{memories.slice(0, shown).map((entry) => <MemoryCard key={entry.id} entry={entry} compact />)}</div>
+      {shown < memories.length && <button className="load-older" type="button" onClick={() => setShown((value) => value + 6)}>Show more from this day</button>}
+    </div>}
   </section>;
 }
 
@@ -96,6 +103,7 @@ export default function FacebookArchive({ entries, setEntries }) {
       </div>
       <p className="archive-results">{filtered.length.toLocaleString()} {scope === "useful" ? "memories worth opening" : "export records"}</p>
     </div>
+    <OnThisDay entries={entries} />
     {filtered.length ? <div className="archive-grid">{filtered.slice(0, shown).map((entry, index, visible) => <Fragment key={entry.id}>{(index === 0 || visible[index - 1].year !== entry.year) && <h2 className="archive-year">{entry.year}</h2>}<MemoryCard entry={entry} /></Fragment>)}</div> : <div className="empty-wall">No memories match these filters.</div>}
     {shown < filtered.length && <button className="load-older" type="button" onClick={() => setShown((value) => value + PAGE_SIZE)}>Show more memories</button>}
     {status && <span className="feed-status" role="status">{status}</span>}
