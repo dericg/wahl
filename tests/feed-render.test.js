@@ -55,19 +55,25 @@ test("owner preview and public cards expose exact and relative semantic time", a
       assert.equal(html.includes("Only me"), owner);
       assert.match(html, /role="group" aria-label="Filter the wall"/);
       if (grouped) {
-        assert.match(html, /aria-label="2 updates from GitHub"/);
-        assert.match(html, /<p>2 commits<\/p>/);
+        assert.match(html, /aria-label="2 updates about work on this site"/);
+        assert.match(html, /<p>2 saved code changes<\/p>/);
         const workSummary = html.match(/<div class="activity-work-summary">([\s\S]*?)<\/div>/)?.[1];
         assert.ok(workSummary);
-        assert.match(workSummary, /<p>Work summary<\/p>/);
+        assert.match(workSummary, /<p>Work on this site<\/p>/);
         assert.match(workSummary, /<ul aria-label="Work summary">/);
-        assert.match(workSummary, /<a[^>]+>A small update<\/a>/);
-        assert.match(workSummary, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
-        assert.match(html, /<details class="activity-details"><summary>View 2 updates<\/summary>/);
+        assert.match(workSummary, /A change to this site&#x27;s code was saved\. This keeps a record of the work for later review\./);
+        assert.doesNotMatch(workSummary, /Commit:|untrusted title|A small update/);
+        assert.match(html, /<details class="activity-details"><summary>View 2 original work notes<\/summary>/);
+        const details = html.match(/<details class="activity-details">([\s\S]*?)<\/details>/)?.[1];
+        assert.match(details, /GitHub, where this site&#x27;s code and work records are kept/);
+        assert.match(details, /<a[^>]+>A small update<\/a>/);
+        assert.match(details, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
         assert.doesNotMatch(html, /<details[^>]*\bopen\b|<script>/);
         assert.match(html, /&lt;script&gt;untrusted title&lt;\/script&gt;/);
         for (const hash of ["abcdef1", "abcdef2"]) {
-          assert.ok(html.includes(`href="https://github.com/dericg/wahl/commit/${hash}"`));
+          for (const section of [workSummary, details]) {
+            assert.ok(section.includes(`href="https://github.com/dericg/wahl/commit/${hash}" target="_blank" rel="noreferrer"`));
+          }
         }
         assert.match(html, new RegExp(`${owner ? 7 : 2} entries loaded`));
       } else {

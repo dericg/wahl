@@ -6,7 +6,7 @@ import ThoughtEditor from "./ThoughtEditor";
 import PullRequestReview from "./PullRequestReview";
 import { draftDetails, FormattedText } from "./formattedText";
 import { fixPresentation, hasActiveFix } from "./fixStatus";
-import { activityHighlights, filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
+import { activityHighlights, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, summarizeActivity, wallEntries } from "./activity";
 import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
 
@@ -69,22 +69,23 @@ function ActivityCard({ activity, now }) {
 function ActivityGroup({ activities, now }) {
   const latest = activities[0];
   return (
-    <article className="post-card activity-card activity-group" aria-label={`${activities.length} updates from GitHub`}>
+    <article className="post-card activity-card activity-group" aria-label={`${activities.length} updates about work on this site`}>
       <header className="post-header">
         <div><strong>Wahl</strong><CardTime value={latest.occurred_at} now={now} /></div>
         <span className="activity-kind">{activities.length} updates</span>
       </header>
       <p>{summarizeActivity(activities)}</p>
       <div className="activity-work-summary">
-        <p>Work summary</p>
+        <p>Work on this site</p>
         <ul aria-label="Work summary">{activityHighlights(activities).map((activity) => <li key={activity.id}>
-          <span>{activity.kind}: </span><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a>
+          <a href={activity.url} target="_blank" rel="noreferrer">{activityWorkSummary(activity)}</a>
         </li>)}</ul>
       </div>
       <details className="activity-details">
-        <summary>View {activities.length} updates</summary>
+        <summary>View {activities.length} original work notes</summary>
+        <p>These notes come from GitHub, where this site's code and work records are kept.</p>
         <ol>{activities.map((activity) => <li key={activity.id}>
-          <div className="post-header"><span className="activity-kind">{activity.kind}</span><CardTime value={activity.occurred_at} now={now} /></div>
+          <div className="post-header"><span className="activity-kind">{summarizeActivity([activity])}</span><CardTime value={activity.occurred_at} now={now} /></div>
           <p><a href={activity.url} target="_blank" rel="noreferrer">{activity.summary}</a></p>
         </li>)}</ol>
       </details>

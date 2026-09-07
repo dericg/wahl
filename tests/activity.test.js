@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityHighlights, activityPayloads, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
+import { activityHighlights, activityPayloads, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
 import { normalizeActivity, validateActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 
 const repository = { full_name: "dericg/wahl" };
@@ -65,7 +65,80 @@ test("combined summary counts event kinds without inventing lifecycle outcomes",
     { kind: "Commit" }, { kind: "Issue", summary: "open #43" },
     { kind: "Commit" }, { kind: "Issue", summary: "closed #43" },
     { kind: "Pull request" }, { kind: "Deployment" }, { kind: "Workflow" },
-  ]), "2 commits · 2 issue updates · 1 pull request update · 1 deployment update · 1 workflow result");
+  ]), "2 saved code changes · 2 request updates · 1 proposed change update · 1 site publishing update · 1 automatic task result");
+  assert.equal(summarizeActivity([{ kind: "Commit" }, { kind: "Other" }]), "1 saved code change · 1 update");
+  assert.equal(summarizeActivity([]), "");
+});
+
+test("work summaries explain saved changes and request states without claiming a fix or release", () => {
+  const cases = [
+    ["Commit", "Refactor RLS callback ingestion", "A change to this site's code was saved. This keeps a record of the work for later review."],
+    ["Issue", "open #43 · Fix the feed", "Request #43 is open. It tracks a problem or idea that still needs a decision."],
+    ["Issue", "closed #43 · Fix the feed", "Request #43 was closed. It is no longer on the open list, but this alone does not mean the problem was fixed."],
+    ["Pull request", "opened #44 · Group repository updates", "Proposed change #44 is open for review. Someone can check the work before it is accepted."],
+    ["Pull request", "merged #44 · Group repository updates", "Proposed change #44 was added to the site's main code. It may still need to be published before readers see it."],
+    ["Pull request", "closed #44 · Group repository updates", "Proposed change #44 was closed. This update does not say it was added to the site."],
+    ["Pull request", "synchronize #44 · Group repository updates", "Proposed change #44 was updated. The latest work can be checked before a decision is made."],
+  ];
+  for (const [kind, summary, expected] of cases) {
+    const activity = { kind, summary, url: "https://github.com/dericg/wahl/pull/44", occurred_at: occurredAt };
+    const original = structuredClone(activity);
+    assert.equal(activityWorkSummary(activity), expected);
+    assert.deepEqual(activity, original);
+  }
+  for (const state of ["open", "opened", "reopened"]) {
+    assert.match(activityWorkSummary({ kind: "Issue", summary: `${state} #43 · Request` }), /Request #43 is open/);
+    assert.match(activityWorkSummary({ kind: "Pull request", summary: `${state} #44 · Change` }), /Proposed change #44 is open for review/);
+  }
+});
+
+test("publishing and automatic task summaries distinguish success, failure and unfinished work", () => {
+  const publishing = {
+    success: /step finished.*which version and site/,
+    failure: /step failed.*needs attention/,
+    error: /hit an error.*needs attention/,
+    requested: /was requested.*does not show that the site changed/,
+    queued: /waiting to start.*no result yet/,
+    pending: /is waiting.*no result yet/,
+    in_progress: /has started.*has not finished/,
+    inactive: /is now inactive.*no longer marks an active version/,
+  };
+  for (const [state, expected] of Object.entries(publishing)) {
+    for (const site of ["test", "Production"]) {
+      const text = activityWorkSummary({ kind: "Deployment", summary: `${site} · ${state}` });
+      assert.match(text, expected);
+      assert.doesNotMatch(text, /production release|live on the site/);
+    }
+  }
+  const tasks = {
+    success: /finished.*step passed.*does not mean a change is live/,
+    failure: /reported a failure.*needs attention/,
+    cancelled: /stopped early.*no completed result/,
+    timed_out: /ran out of time.*did not finish/,
+    action_required: /needs someone's attention.*cannot move forward/,
+    startup_failure: /could not start.*before another try/,
+  };
+  for (const [state, expected] of Object.entries(tasks)) {
+    for (const name of ["Validate Wahl", "Turn a Wahl thought into a pull request"]) {
+      const text = activityWorkSummary({ kind: "Workflow", summary: `${name} · ${state}` });
+      assert.match(text, expected);
+      assert.doesNotMatch(text, /workflow|pull request|Validate Wahl/);
+      assert.match(text, name === "Validate Wahl" ? /check of this site's code/ : /prepare a proposed site change/);
+    }
+  }
+});
+
+test("unknown states and untrusted titles do not invent a successful outcome", () => {
+  for (const kind of ["Issue", "Pull request", "Deployment", "Workflow", "Other"]) {
+    const text = activityWorkSummary({ kind, summary: "<script>merged #44 · success</script>" });
+    assert.doesNotMatch(text, /<script>|#44|was added|step passed|step finished/);
+    assert.equal(typeof activityWorkSummary({ kind }), "string");
+  }
+  assert.match(activityWorkSummary({ kind: "Issue", summary: "open #43 · merged #44 · success" }), /Request #43 is open/);
+  for (const state of ["unknown", "constructor", "__proto__"]) {
+    assert.match(activityWorkSummary({ kind: "Deployment", summary: `test · ${state}` }), /Check its notes/);
+    assert.match(activityWorkSummary({ kind: "Workflow", summary: `New task · ${state}` }), /has a new result/);
+  }
 });
 
 test("work highlights surface up to three distinct changes ahead of workflow noise", () => {

@@ -66,11 +66,11 @@ export function groupConsecutiveActivity(entries) {
 
 export function summarizeActivity(activities) {
   const labels = {
-    Commit: ["commit", "commits"],
-    Issue: ["issue update", "issue updates"],
-    "Pull request": ["pull request update", "pull request updates"],
-    Deployment: ["deployment update", "deployment updates"],
-    Workflow: ["workflow result", "workflow results"],
+    Commit: ["saved code change", "saved code changes"],
+    Issue: ["request update", "request updates"],
+    "Pull request": ["proposed change update", "proposed change updates"],
+    Deployment: ["site publishing update", "site publishing updates"],
+    Workflow: ["automatic task result", "automatic task results"],
   };
   const counts = new Map();
   for (const activity of activities) counts.set(activity.kind, (counts.get(activity.kind) || 0) + 1);
@@ -78,6 +78,60 @@ export function summarizeActivity(activities) {
     const label = labels[kind] || ["update", "updates"];
     return `${count} ${label[count === 1 ? 0 : 1]}`;
   }).join(" · ");
+}
+
+export function activityWorkSummary(activity) {
+  // Describe only recorded outcomes. Titles remain verbatim in the source notes;
+  // they cannot tell us whether a problem was fixed or a change reached readers.
+  const summary = String(activity.summary || "");
+  if (activity.kind === "Commit") {
+    return "A change to this site's code was saved. This keeps a record of the work for later review.";
+  }
+  if (["Issue", "Pull request"].includes(activity.kind)) {
+    const match = /^(\w+) #(\d+)(?: · |$)/.exec(summary);
+    const state = match?.[1];
+    const subject = activity.kind === "Issue" ? "Request" : "Proposed change";
+    const label = `${subject}${match ? ` #${match[2]}` : ""}`;
+    if (activity.kind === "Issue") {
+      if (["open", "opened", "reopened"].includes(state)) return `${label} is open. It tracks a problem or idea that still needs a decision.`;
+      if (state === "closed") return `${label} was closed. It is no longer on the open list, but this alone does not mean the problem was fixed.`;
+      return `${label} was updated. The notes help readers follow the problem or idea.`;
+    }
+    if (state === "merged") return `${label} was added to the site's main code. It may still need to be published before readers see it.`;
+    if (state === "closed") return `${label} was closed. This update does not say it was added to the site.`;
+    if (["open", "opened", "reopened"].includes(state)) return `${label} is open for review. Someone can check the work before it is accepted.`;
+    return `${label} was updated. The latest work can be checked before a decision is made.`;
+  }
+  if (activity.kind === "Deployment") {
+    const state = summary.split(" · ").at(-1);
+    const outcomes = {
+      success: "A site publishing step finished. The linked record shows which version and site it was for.",
+      failure: "A site publishing step failed. It needs attention before that attempt can finish.",
+      error: "A site publishing step hit an error. It needs attention before that attempt can finish.",
+      requested: "Site publishing was requested. There is no result yet, so this does not show that the site changed.",
+      queued: "Site publishing is waiting to start. There is no result yet to review.",
+      pending: "Site publishing is waiting. There is no result yet to review.",
+      in_progress: "Site publishing has started. It has not finished, so there is no final result yet.",
+      inactive: "An earlier site publishing record is now inactive. It no longer marks an active version of the site.",
+    };
+    return Object.hasOwn(outcomes, state) ? outcomes[state] : "A site publishing record changed. Check its notes to see whether anything is ready to view.";
+  }
+  if (activity.kind === "Workflow") {
+    const [name, state] = summary.split(" · ");
+    const task = name === "Validate Wahl" ? "An automatic check of this site's code"
+      : name === "Turn a Wahl thought into a pull request" ? "An automatic task to prepare a proposed site change"
+        : "An automatic task for this site";
+    const outcomes = {
+      success: "finished. This step passed, but it does not mean a change is live on the site.",
+      failure: "reported a failure. The result needs attention before the work can move forward.",
+      cancelled: "stopped early. There is no completed result to rely on.",
+      timed_out: "ran out of time. The work did not finish and may need another try.",
+      action_required: "needs someone's attention. The work cannot move forward on its own.",
+      startup_failure: "could not start. The cause needs to be checked before another try.",
+    };
+    return `${task} ${Object.hasOwn(outcomes, state) ? outcomes[state] : "has a new result. Its notes show what happened and whether more work is needed."}`;
+  }
+  return "Work on this site was recorded. The linked notes give more detail about what happened.";
 }
 
 export function activityHighlights(activities) {
