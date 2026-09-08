@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { normalizeActivity, validateActivity } from "../_shared/wahl-activity-policy.js";
+import { normalizeActivity, readerSummaryFromBody, validateActivity } from "../_shared/wahl-activity-policy.js";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -27,6 +27,19 @@ Deno.serve(async (request) => {
 
   let payload;
   try { payload = await request.json(); } catch { return json({ error: "A JSON body is required" }, 400); }
+  const deployment = payload?.kind === "Deployment" && /^github-pages · success · #(\d+) · /.exec(payload.summary || "");
+  const pullUrl = deployment && new RegExp(`^https://github\\.com/dericg/wahl/pull/${deployment[1]}/?$`).test(payload.url || "");
+  if (deployment && pullUrl && !String(payload.summary).includes(" · reader:")) {
+    try {
+      const response = await fetch(`https://api.github.com/repos/dericg/wahl/pulls/${deployment[1]}`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "Wahl-Activity" } });
+      if (response.ok) {
+        const summary = readerSummaryFromBody((await response.json())?.body);
+        if (summary) payload.summary = `github-pages · success · #${deployment[1]} · reader:${summary}`;
+      }
+    } catch {
+      // Retain the bounded workflow summary if GitHub is temporarily unavailable.
+    }
+  }
   const policyError = validateActivity(payload || {});
   if (policyError) return json({ error: policyError }, 400);
   payload = normalizeActivity(payload);

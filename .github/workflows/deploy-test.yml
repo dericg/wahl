@@ -130,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
-          title="$(jq -r '.title | gsub("[\\u0000-\\u001f\\u007f-\\u009f]"; " ") | .[0:220]' <<< "$pr")"
+          title="$(jq -r '.title | gsub("[[:cntrl:]]"; " ") | .[0:220]' <<< "$pr")"
           reader_summary="$(jq -r '
             (.body // "") | split("\n") |
             reduce .[] as $line ({inside: false, parts: []};
@@ -139,7 +139,7 @@ jobs:
               elif .inside and (($line | gsub("^[[:space:]]+|[[:space:]]+$"; "")) | length) > 0
                 then .parts += [($line | gsub("^[[:space:]]+|[[:space:]]+$"; ""))]
               else . end) |
-            .parts | join(" ") | gsub("[\\u0000-\\u001f\\u007f-\\u009f]"; " ") | gsub("[[:space:]]+"; " ") | .[0:240]
+            .parts | join(" ") | gsub("[[:cntrl:]]"; " ") | gsub("[[:space:]]+"; " ") | .[0:240]
           ' <<< "$pr")"
           if [ -z "$reader_summary" ]; then reader_summary="$title"; fi
           url="$(jq -r '.html_url' <<< "$pr")"

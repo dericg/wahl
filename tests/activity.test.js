@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readerSummaryFromBody } from "../supabase/functions/_shared/wahl-activity-policy.js";
 import { activityHighlights, activityOutcomes, activityPayloads, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
 import { normalizeActivity, validateActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 
@@ -190,6 +191,12 @@ test("a reader summary explains the change as prose and repeated test deployment
   assert.equal(activityWorkSummary(newest), "Deric published a new test version of Wahl. The update adds a private way to browse old Facebook posts. It also includes an On this day section.");
   assert.deepEqual(activityHighlights([newest, older]), [newest]);
   assert.deepEqual(activityOutcomes([newest, older]), [newest, older]);
+});
+
+test("reader summaries come only from their named pull request section", () => {
+  const body = "## Summary\nTechnical notes.\n\n## Reader summary\nThe update makes the archive easier to understand.\nIt also removes repeated notices.\n\n## Validation\nTests pass.";
+  assert.equal(readerSummaryFromBody(body), "The update makes the archive easier to understand. It also removes repeated notices.");
+  assert.equal(readerSummaryFromBody("## Summary\nNo reader section"), "");
 });
 
 test("automatic tasks explain proven work and do not infer a fix or unrelated title", () => {
