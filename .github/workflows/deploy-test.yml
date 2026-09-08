@@ -141,11 +141,11 @@ jobs:
               else . end) |
             .parts | join(" ") | gsub("[[:cntrl:]]"; " ") | gsub("[[:space:]]+"; " ") | .[0:240]
           ' <<< "$pr")"
-          if [ -z "$reader_summary" ]; then reader_summary="$title"; fi
           url="$(jq -r '.html_url' <<< "$pr")"
+          if [ -n "$reader_summary" ]; then detail="reader:$reader_summary"; else detail="$title"; fi
           body="$(jq -n \
             --arg sourceId "test-deployment:${GITHUB_RUN_ID}" \
-            --arg summary "github-pages · success · #${PR} · reader:${reader_summary}" \
+            --arg summary "github-pages · success · #${PR} · ${detail}" \
             --arg url "$url" \
             --arg occurredAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{sourceId: $sourceId, kind: "Deployment", summary: $summary, url: $url, occurredAt: $occurredAt}')"

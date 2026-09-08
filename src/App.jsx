@@ -81,6 +81,7 @@ export function ActivityGroup({ activities, now }) {
       <div className="activity-work-summary">
         <p>What Deric is changing</p>
         <ul aria-label="Work summary">{activityHighlights(activities).map((activity) => <li key={activity.id}>
+          <CardTime value={activity.occurred_at} now={now} />
           <a href={activity.url} target="_blank" rel="noreferrer">{activityWorkSummary(activity)}</a>
         </li>)}</ul>
       </div>

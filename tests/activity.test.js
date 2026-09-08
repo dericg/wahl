@@ -176,6 +176,13 @@ test("request and proposed-change titles name the work without claiming the titl
   }
 });
 
+test("old automation titles are cleaned up for readers", () => {
+  assert.equal(
+    activityWorkSummary({ kind: "Pull request", summary: "merged #5 · [Wahl fix] **_Hey look! Formatted text._** it should be wysiwyg" }),
+    "Deric accepted this change: “Hey look! Formatted text. it should be wysiwyg”. It is now part of Wahl and will appear when that version is published.",
+  );
+});
+
 test("a published test version explains which proposed change it contains", () => {
   const activity = {
     kind: "Deployment",

@@ -67,7 +67,8 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
   assert.match(testDeployment, /test-deployment:\$\{GITHUB_RUN_ID\}/);
   assert.match(testDeployment, /Reader summary/);
   assert.match(testDeployment, /gsub\("\[\[:cntrl:\]\]"; " "\)/);
-  assert.match(testDeployment, /github-pages · success · #\$\{PR\} · reader:\$\{reader_summary\}/);
+  assert.match(testDeployment, /detail="reader:\$reader_summary"/);
+  assert.match(testDeployment, /github-pages · success · #\$\{PR\} · \$\{detail\}/);
   assert.match(testDeployment, /functions\/v1\/record-wahl-activity/);
   assert.match(statusCallback, /readerSummaryFromBody/);
   assert.match(statusCallback, /api\.github\.com\/repos\/dericg\/wahl\/pulls/);

@@ -11,6 +11,15 @@ function validDate(value) {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 
+function readableTopic(value) {
+  return String(value || "")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ")
+    .replace(/^\s*\[Wahl fix\]\s*/i, "")
+    .replace(/[*_`]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function releaseActivity(commits = []) {
   return commits.flatMap((commit) => {
     if (!/^[a-f\d]{7,40}$/i.test(commit.hash || "") || !validDate(commit.date)) return [];
@@ -131,7 +140,7 @@ export function summarizeActivity(activities) {
 export function activityWorkSummary(activity) {
   const summary = String(activity.summary || "");
   if (activity.kind === "Commit") {
-    const title = summary.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim();
+    const title = readableTopic(summary);
     const topic = title ? `“${Array.from(title).slice(0, 180).join("")}${Array.from(title).length > 180 ? "…" : ""}”` : "an update to Wahl";
     return `Deric saved work on ${topic}. It is part of Wahl's code, but this note does not say whether it is on the website yet.`;
   }
@@ -140,7 +149,7 @@ export function activityWorkSummary(activity) {
     const state = match?.[1];
     // Quote the title as a name, never as evidence of a fix or a publication.
     // React renders this bounded text directly, without HTML or Markdown.
-    const title = match?.[3]?.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim();
+    const title = readableTopic(match?.[3]);
     const topic = title ? `“${Array.from(title).slice(0, 180).join("")}${Array.from(title).length > 180 ? "…" : ""}”` : "an update to Wahl";
     if (activity.kind === "Issue") {
       if (["open", "opened", "reopened"].includes(state)) return `Deric plans to work on ${topic}. No change has been made yet.`;

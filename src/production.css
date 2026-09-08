@@ -63,6 +63,9 @@ main { overflow: clip; }
 .activity-work-summary > p { margin: 0 0 6px; font: inherit; }
 .activity-work-summary ul { margin: 0; padding-left: 18px; }
 .activity-work-summary li + li { margin-top: 4px; }
+.activity-work-summary li .card-time { display: block; margin-bottom: 2px; }
+.activity-work-summary li .card-time span:first-child { display: none; }
+.activity-work-summary li .card-time .exact-time { font-size: 11px; letter-spacing: .02em; }
 .activity-details { margin-top: 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .activity-details > summary { width: fit-content; padding: 6px 0; cursor: pointer; }
 .activity-details > summary:hover { color: var(--ink); }
