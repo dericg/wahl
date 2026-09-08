@@ -40,8 +40,11 @@ export function mergeActivity(remote = [], fallbackCommits = []) {
       && !(entry.kind === "Deployment" && entry.url === `${repositoryUrl}/deployments`));
   const byIdentity = new Map();
   for (const entry of entries) {
+    const publishedPull = entry.kind === "Deployment"
+      && /^github-pages · success · #(\d+) · /.exec(String(entry.summary || ""))?.[1];
     const identity = entry.kind === "Workflow" ? entry.url.replace(/\/attempts\/\d+$/, "")
-      : entry.kind === "Deployment" ? entry.source_id
+      : publishedPull ? `published-pull:${publishedPull}`
+        : entry.kind === "Deployment" ? entry.source_id
         : `${entry.kind}\u0000${entry.url}\u0000${timestampKey(entry.occurred_at)}`;
     const previous = byIdentity.get(identity);
     if (!previous || timestampKey(entry.occurred_at) >= timestampKey(previous.occurred_at)) byIdentity.set(identity, entry);

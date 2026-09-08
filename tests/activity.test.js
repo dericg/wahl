@@ -31,6 +31,14 @@ test("generic publishing lifecycle records remain stored but stay off the public
   assert.deepEqual(mergeActivity([generic, detailed]), [detailed]);
 });
 
+test("repeated successful test publications show only the newest card for a pull request", () => {
+  const summary = "github-pages · success · #48 · reader:The update adds a private archive.";
+  const older = { source_id: "test-deployment:1", kind: "Deployment", summary, url: "https://github.com/dericg/wahl/pull/48", occurred_at: "2026-09-07T19:00:00Z" };
+  const newest = { ...older, source_id: "test-deployment:2", occurred_at: "2026-09-07T20:00:00Z" };
+  assert.deepEqual(mergeActivity([older, newest]), [newest]);
+  assert.deepEqual(mergeActivity([newest, older]), [newest]);
+});
+
 test("thoughts and GitHub events form one chronological wall feed", () => {
   const posts = [{ id: "thought", text: "A thought", created_at: "2026-09-05T19:00:00Z" }];
   const activity = [{ source_id: "issue:6", kind: "Issue", summary: "Issue", url: "https://github.com/dericg/wahl/issues/6", occurred_at: "2026-09-05T20:00:00Z" }];
