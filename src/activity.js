@@ -70,11 +70,13 @@ export function groupConsecutiveActivity(entries) {
 function publishingRecord(activity) {
   if (activity.kind !== "Deployment") return null;
   const match = /^([^·]+) · (\w+)(?: · #(\d+) · ([\s\S]+))?$/.exec(String(activity.summary || ""));
+  const detail = match?.[4]?.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim();
   return match ? {
     site: match[1].trim().toLowerCase(),
     state: match[2],
     pullNumber: match[3],
-    title: match[4]?.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").trim(),
+    title: detail?.startsWith("reader:") ? undefined : detail,
+    readerSummary: detail?.startsWith("reader:") ? detail.slice(7).trim() : undefined,
   } : null;
 }
 
@@ -151,15 +153,19 @@ export function activityWorkSummary(activity) {
     return `Deric revised this proposed change: ${topic}. It is still being reviewed.`;
   }
   if (activity.kind === "Deployment") {
-    const { site, state, pullNumber, title } = publishingRecord(activity) || {};
+    const { site, state, pullNumber, title, readerSummary } = publishingRecord(activity) || {};
     const change = pullNumber && title
       ? ` It includes proposed change #${pullNumber}: “${Array.from(title).slice(0, 160).join("")}${Array.from(title).length > 160 ? "…" : ""}”.`
+      : "";
+    const readerChange = pullNumber && readerSummary
+      ? ` ${Array.from(readerSummary).slice(0, 240).join("")}${Array.from(readerSummary).length > 240 ? "…" : ""}`
       : "";
     // github-pages proves test publication. The shared test environment also
     // records validation and service preparation, so its success alone cannot.
     const website = site === "github-pages";
     const preparation = site === "test";
     if (state === "success") {
+      if (website && readerChange) return `Deric published a new test version of Wahl.${readerChange}`;
       if (website) return change
         ? `Deric published a new test version of Wahl.${change} It is ready to try.`
         : "A new test version of Wahl is ready. It includes the proposed changes and can now be reviewed.";
@@ -211,8 +217,11 @@ export function activityWorkSummary(activity) {
 export function activityHighlights(activities) {
   const seen = new Set();
   return activityOutcomes(activities).filter((activity) => {
-    // Separate publishing attempts remain distinct even with identical results.
-    const identity = activity.kind === "Deployment" ? activity
+    // The collapsed explanation names a proposed change once. Every separate
+    // publishing attempt remains available in the chronological details.
+    const publishing = publishingRecord(activity);
+    const identity = activity.kind === "Deployment" && publishing?.pullNumber ? `Deployment\u0000${publishing.pullNumber}`
+      : activity.kind === "Deployment" ? activity
       : `${activity.kind}\u0000${activity.summary}`;
     if (seen.has(identity)) return false;
     seen.add(identity);

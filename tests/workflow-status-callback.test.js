@@ -64,7 +64,8 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
   assert.match(testDeployment, /WAHL_BASE_PATH: \/wahl\//);
   assert.match(testDeployment, /gh pr comment "\$PR" --repo "\$GITHUB_REPOSITORY"/);
   assert.match(testDeployment, /test-deployment:\$\{GITHUB_RUN_ID\}/);
-  assert.match(testDeployment, /github-pages · success · #\$\{PR\} · \$\{title\}/);
+  assert.match(testDeployment, /Reader summary/);
+  assert.match(testDeployment, /github-pages · success · #\$\{PR\} · reader:\$\{reader_summary\}/);
   assert.match(testDeployment, /functions\/v1\/record-wahl-activity/);
 });
 

@@ -183,6 +183,15 @@ test("a published test version explains which proposed change it contains", () =
   assert.equal(activityWorkSummary(activity), "Deric published a new test version of Wahl. It includes proposed change #44: “Make site updates easier to understand”. It is ready to try.");
 });
 
+test("a reader summary explains the change as prose and repeated test deployments collapse", () => {
+  const summary = "github-pages · success · #48 · reader:The update adds a private way to browse old Facebook posts. It also includes an On this day section.";
+  const newest = { ...deployment(20, "success", 21), summary };
+  const older = { ...deployment(19, "success", 20), summary };
+  assert.equal(activityWorkSummary(newest), "Deric published a new test version of Wahl. The update adds a private way to browse old Facebook posts. It also includes an On this day section.");
+  assert.deepEqual(activityHighlights([newest, older]), [newest]);
+  assert.deepEqual(activityOutcomes([newest, older]), [newest, older]);
+});
+
 test("automatic tasks explain proven work and do not infer a fix or unrelated title", () => {
   const check = { kind: "Workflow", summary: "Validate Wahl · success" };
   const proposal = { kind: "Workflow", summary: "Turn a Wahl thought into a pull request · success" };
