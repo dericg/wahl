@@ -51,7 +51,6 @@ jobs:
           test "$(jq -r '.head.repo.full_name' <<< "$pull")" = "$GITHUB_REPOSITORY"
           test "$(jq -r '.head.sha' <<< "$pull")" = "$EXPECTED_HEAD"
           test "$(jq -r '.base.sha' <<< "$pull")" = "$EXPECTED_BASE"
-          test "$(jq -r '.mergeable' <<< "$pull")" = true
           mergeable_state="$(jq -r '.mergeable_state' <<< "$pull")"
           # GitHub can report `unstable` even when no required check is
           # configured. The exact-head validation below is the authoritative
@@ -80,6 +79,14 @@ jobs:
             test "$revision_status" -gt 0
           fi
 
-          result="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
-            -f sha="$EXPECTED_HEAD" -f merge_method=squash)"
-          test "$(jq -r '.merged' <<< "$result")" = true
+          result=''
+          for attempt in 1 2 3; do
+            result="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+              -f sha="$EXPECTED_HEAD" -f merge_method=squash || true)"
+            if test "$(jq -r '.merged // false' <<< "$result")" = true; then
+              exit 0
+            fi
+            sleep 3
+          done
+          printf '%s\n' "$result"
+          exit 1

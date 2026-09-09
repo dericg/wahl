@@ -2,6 +2,9 @@ name: Deploy Wahl test backend
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: [Merge reviewed Wahl pull request]
+    types: [completed]
   repository_dispatch:
     types: [wahl_test_deploy]
   workflow_dispatch:
@@ -26,12 +29,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_PR: ${{ github.event.client_payload.pr_number || inputs.pull_request_number }}
-          REQUESTED_SHA: ${{ github.event.client_payload.head_sha }}
+          REQUESTED_SHA: ${{ github.event.client_payload.head_sha || github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          if test "${{ github.event_name }}" = push; then
+          if test "${{ github.event_name }}" = push || test "${{ github.event_name }}" = workflow_run; then
+            if test "${{ github.event_name }}" = workflow_run; then
+              test "${{ github.event.workflow_run.conclusion }}" = success
+              test "${{ github.event.workflow_run.head_branch }}" = main
+            fi
             REQUESTED_PR=""
-            sha="${GITHUB_SHA}"
+            sha="${REQUESTED_SHA:-${GITHUB_SHA}}"
           else
             printf '%s' "$REQUESTED_PR" | grep -Eq '^[1-9][0-9]*$'
             pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$REQUESTED_PR")"
