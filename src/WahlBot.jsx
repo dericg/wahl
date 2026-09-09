@@ -28,11 +28,16 @@ export default function WahlBot({ onRequest, busy, previewMode }) {
     if (!accessToken) throw new Error("Your session expired. Sign in again.");
     const { data, error: invokeError } = await supabase.functions.invoke("wahl-chat", { body, headers: { Authorization: `Bearer ${accessToken}` } });
     if (invokeError) {
-      try {
-        const response = await invokeError.context?.json();
-        if (response?.error) throw new Error(response.error);
-      } catch (problem) {
-        if (problem instanceof Error && problem.message !== "The Wahl bot could not respond.") throw problem;
+      const context = invokeError.context;
+      if (context && typeof context.json === "function") {
+        try {
+          const response = await context.json();
+          if (response?.error) throw new Error(response.error);
+        } catch (problem) {
+          if (problem instanceof Error && problem.message !== "The Wahl bot could not respond.") throw problem;
+        }
+      } else if (context && typeof context === "object" && typeof context.error === "string") {
+        throw new Error(context.error);
       }
       throw new Error("The Wahl bot could not respond.");
     }

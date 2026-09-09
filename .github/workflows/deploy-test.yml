@@ -94,6 +94,8 @@ jobs:
           supabase functions deploy update-wahl-fix --project-ref "$project_ref" --no-verify-jwt
           supabase functions deploy record-wahl-activity --project-ref "$project_ref" --no-verify-jwt
           supabase functions deploy wahl-chat --project-ref "$project_ref" --no-verify-jwt
+          chat_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --request OPTIONS "https://${project_ref}.supabase.co/functions/v1/wahl-chat")"
+          test "$chat_status" = "200"
   deploy-pages:
     needs: [validate, deploy]
     runs-on: ubuntu-latest

@@ -37,4 +37,11 @@ test("trusted test deployment installs the server secret and chat function", () 
   assert.match(deployment, /OPENAI_API_KEY: \$\{\{ secrets\.OPENAI_API_KEY \}\}/);
   assert.match(deployment, /supabase secrets set OPENAI_API_KEY=/);
   assert.match(deployment, /supabase functions deploy wahl-chat/);
+  assert.match(deployment, /request OPTIONS/);
+  assert.match(deployment, /test "\$chat_status" = "200"/);
+});
+
+test("client handles non-Response function error contexts", () => {
+  assert.match(bot, /typeof context\.json === "function"/);
+  assert.match(bot, /typeof context\.error === "string"/);
 });
