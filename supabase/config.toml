@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.record-wahl-activity]
 verify_jwt = false
+
+[functions.wahl-chat]
+verify_jwt = false

@@ -10,6 +10,7 @@ import { activityHighlights, activityOutcomes, activityWorkSummary, filterWallEn
 import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
 import FacebookArchive from "./FacebookArchive.jsx";
+import WahlBot from "./WahlBot.jsx";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -351,8 +352,9 @@ export default function App() {
 
   async function addPost({ text, audience }) {
     if (previewMode) {
-      setPosts((current) => [{ id: crypto.randomUUID(), text, audience_type: audience, created_at: new Date().toISOString() }, ...current]);
-      return true;
+      const post = { id: crypto.randomUUID(), text, audience_type: audience, created_at: new Date().toISOString() };
+      setPosts((current) => [post, ...current]);
+      return post;
     }
     if (!supabase || !session || !owner) return false;
     const current = pager.current;
@@ -362,7 +364,7 @@ export default function App() {
     if (current !== pager.current) return false;
     if (error) { setNotice(error.message); return false; }
     setPosts((posts) => appendPosts(posts, [data]));
-    return true;
+    return data;
   }
 
   async function deletePost(id) {
@@ -377,7 +379,7 @@ export default function App() {
   async function sendFix(postId) {
     if (previewMode) {
       setFixes((current) => ({ ...current, [postId]: { post_id: postId, status: "queued" } }));
-      return;
+      return true;
     }
     setFixes((current) => ({ ...current, [postId]: { post_id: postId, status: "queued" } }));
     const { data: authData } = await supabase.auth.getSession();
@@ -389,7 +391,7 @@ export default function App() {
         return next;
       });
       setNotice("Your session expired. Sign in again, then resend the fix.");
-      return;
+      return false;
     }
     const { data, error } = await supabase.functions.invoke("dispatch-wahl-fix", {
       body: { postId },
@@ -409,10 +411,17 @@ export default function App() {
         return next;
       });
       setNotice(message);
-      return;
+      return false;
     }
     setFixes((current) => ({ ...current, [postId]: data.request }));
     setNotice("");
+    return true;
+  }
+
+  async function askWahl(instruction) {
+    const post = await addPost({ text: `#fix ${instruction}`, audience: "private" });
+    if (!post) return false;
+    return sendFix(post.id);
   }
 
   async function refreshFix(postId) {
@@ -436,6 +445,7 @@ export default function App() {
         <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
       </header>
       <PersonalNote />
+      {owner && <WahlBot onRequest={askWahl} busy={busy} previewMode={previewMode} />}
       {owner && <Composer onPost={addPost} busy={busy} />}
       {notice && <div className="notice" role="status">{notice}</div>}
       <section className="feed" aria-label="The Wall">

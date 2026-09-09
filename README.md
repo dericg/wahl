@@ -13,6 +13,14 @@ The launch MVP is a single-page personal website backed by Supabase Postgres. Pu
 
 Without Supabase environment variables, the development server runs as an interactive local preview. Production builds without those variables are read-only.
 
+## Private Wahl bot
+
+The signed-in owner can open **Talk with Wahl** for a persistent, private conversation about the site. The `wahl-chat` Edge Function sends recent messages and bounded, read-only repository context to OpenAI, allowing the bot to answer questions, clarify intent, and help shape a change before acting. Messages are stored behind owner-only row-level security.
+
+When the owner chooses **Prepare this change**, Wahl saves the latest instruction as a private `#fix` thought and sends it through the existing authenticated GitHub automation. Codex then inspects the complete checkout, implements the smallest safe change, runs the project checks, and may open an issue and pull request for review.
+
+The browser never receives the OpenAI or GitHub credentials. The conversational function uses `OPENAI_API_KEY` as a Supabase server secret; GitHub Actions uses its protected secret of the same name for code work. The bot cannot merge or publish. Owner review, existing merge checks, and separately authorized publishing remain required. See `docs/conversational-bot.md` for the full contract.
+
 ## Private Facebook archive
 
 The signed-in owner can open **Archive** and choose the `your_facebook_activity` folder from an unzipped Facebook data download. Wahl reads supported posts, stories, photos, and videos directly from the selected folder. The archive stays in browser memory: it is not uploaded, copied into the repository, or saved by Wahl, and it must be chosen again after a reload.
