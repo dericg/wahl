@@ -1,5 +1,10 @@
 name: Deploy Wahl test backend
 on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [Merge reviewed Wahl pull request]
+    types: [completed]
   repository_dispatch:
     types: [wahl_test_deploy]
   workflow_dispatch:
@@ -24,14 +29,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_PR: ${{ github.event.client_payload.pr_number || inputs.pull_request_number }}
-          REQUESTED_SHA: ${{ github.event.client_payload.head_sha }}
+          REQUESTED_SHA: ${{ github.event.client_payload.head_sha || github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          printf '%s' "$REQUESTED_PR" | grep -Eq '^[1-9][0-9]*$'
-          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$REQUESTED_PR")"
-          test "$(jq -r '.state' <<< "$pr")" = open
-          test "$(jq -r '.head.repo.full_name' <<< "$pr")" = dericg/wahl
-          sha="$(jq -r '.head.sha' <<< "$pr")"
+          if test "${{ github.event_name }}" = push || test "${{ github.event_name }}" = workflow_run; then
+            if test "${{ github.event_name }}" = workflow_run; then
+              test "${{ github.event.workflow_run.conclusion }}" = success
+              test "${{ github.event.workflow_run.head_branch }}" = main
+            fi
+            REQUESTED_PR=""
+            sha="${REQUESTED_SHA:-${GITHUB_SHA}}"
+          else
+            printf '%s' "$REQUESTED_PR" | grep -Eq '^[1-9][0-9]*$'
+            pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$REQUESTED_PR")"
+            test "$(jq -r '.state' <<< "$pr")" = open
+            test "$(jq -r '.head.repo.full_name' <<< "$pr")" = dericg/wahl
+            sha="$(jq -r '.head.sha' <<< "$pr")"
+          fi
           if test -n "$REQUESTED_SHA"; then test "$REQUESTED_SHA" = "$sha"; fi
           echo "number=$REQUESTED_PR" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
@@ -84,12 +98,9 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RAW_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
           printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
-          test -n "$OPENAI_API_KEY"
-          supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" --project-ref "$project_ref"
           supabase functions deploy dispatch-wahl-fix --project-ref "$project_ref" --no-verify-jwt
           supabase functions deploy update-wahl-fix --project-ref "$project_ref" --no-verify-jwt
           supabase functions deploy record-wahl-activity --project-ref "$project_ref" --no-verify-jwt
@@ -119,7 +130,9 @@ jobs:
           SHA: ${{ needs.validate.outputs.sha }}
           PAGE_URL: ${{ steps.pages.outputs.page_url }}
         run: |
-          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
+          if test -n "$PR"; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "Automated test deployment succeeded for commit \`$SHA\`: $PAGE_URL"
+          fi
   record-result:
     needs: [validate, deploy-pages]
     runs-on: ubuntu-latest
@@ -135,23 +148,31 @@ jobs:
           STATUS_CALLBACK_TOKEN: ${{ secrets.WAHL_STATUS_CALLBACK_TOKEN }}
         run: |
           set -euo pipefail
-          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
-          title="$(jq -r '.title | gsub("[[:cntrl:]]"; " ") | .[0:220]' <<< "$pr")"
-          reader_summary="$(jq -r '
-            (.body // "") | split("\n") |
-            reduce .[] as $line ({inside: false, parts: []};
-              if ($line | test("^##[[:space:]]+Reader summary"; "i")) then .inside = true
-              elif .inside and ($line | test("^##[[:space:]]+")) then .inside = false
-              elif .inside and (($line | gsub("^[[:space:]]+|[[:space:]]+$"; "")) | length) > 0
-                then .parts += [($line | gsub("^[[:space:]]+|[[:space:]]+$"; ""))]
-              else . end) |
-            .parts | join(" ") | gsub("[[:cntrl:]]"; " ") | gsub("[[:space:]]+"; " ") | .[0:240]
-          ' <<< "$pr")"
-          url="$(jq -r '.html_url' <<< "$pr")"
-          if [ -n "$reader_summary" ]; then detail="reader:$reader_summary"; else detail="$title"; fi
+          if test -n "$PR"; then
+            pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
+            title="$(jq -r '.title | gsub("[[:cntrl:]]"; " ") | .[0:220]' <<< "$pr")"
+            reader_summary="$(jq -r '
+              (.body // "") | split("\n") |
+              reduce .[] as $line ({inside: false, parts: []};
+                if ($line | test("^##[[:space:]]+Reader summary"; "i")) then .inside = true
+                elif .inside and ($line | test("^##[[:space:]]+")) then .inside = false
+                elif .inside and (($line | gsub("^[[:space:]]+|[[:space:]]+$"; "")) | length) > 0
+                  then .parts += [($line | gsub("^[[:space:]]+|[[:space:]]+$"; ""))]
+                else . end) |
+              .parts | join(" ") | gsub("[[:cntrl:]]"; " ") | gsub("[[:space:]]+"; " ") | .[0:240]
+            ' <<< "$pr")"
+            url="$(jq -r '.html_url' <<< "$pr")"
+            if [ -n "$reader_summary" ]; then detail="reader:$reader_summary"; else detail="$title"; fi
+            summary="github-pages · success · #${PR} · ${detail}"
+          else
+            commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/${GITHUB_SHA}")"
+            title="$(jq -r '.commit.message | split("\\n")[0] | gsub("[[:cntrl:]]"; " ") | .[0:220]' <<< "$commit")"
+            url="$(jq -r '.html_url' <<< "$commit")"
+            summary="github-pages · success"
+          fi
           body="$(jq -n \
             --arg sourceId "test-deployment:${GITHUB_RUN_ID}" \
-            --arg summary "github-pages · success · #${PR} · ${detail}" \
+            --arg summary "$summary" \
             --arg url "$url" \
             --arg occurredAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{sourceId: $sourceId, kind: "Deployment", summary: $summary, url: $url, occurredAt: $occurredAt}')"

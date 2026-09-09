@@ -36,9 +36,8 @@ test("code work requires separate brief preparation and confirmation", () => {
   assert.doesNotMatch(handler, /from\("posts"\)|dispatch-wahl-fix|\/dispatches/);
 });
 
-test("trusted test deployment installs the server secret and chat function", () => {
-  assert.match(deployment, /OPENAI_API_KEY: \$\{\{ secrets\.OPENAI_API_KEY \}\}/);
-  assert.match(deployment, /supabase secrets set OPENAI_API_KEY=/);
+test("trusted test deployment preserves owner-managed secrets and deploys the chat function", () => {
+  assert.doesNotMatch(deployment, /supabase secrets set/);
   assert.match(deployment, /supabase functions deploy wahl-chat/);
   assert.match(deployment, /request OPTIONS/);
   assert.match(deployment, /test "\$chat_status" = "200"/);

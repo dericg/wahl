@@ -20,6 +20,7 @@ main { overflow: clip; }
 .owner-access { display: flex; justify-content: flex-end; min-width: 0; }
 .quiet-button { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #675640; font-size: 9px; cursor: pointer; }
 .quiet-button:hover { color: var(--muted); }
+.owner-access button:disabled { opacity: .55; cursor: default; }
 .sign-in { display: grid; grid-template-columns: 1fr auto; gap: 6px; width: min(100%, 340px); }
 .sign-in input { min-width: 0; border: 1px solid var(--line); border-radius: 5px; background: #160e09; color: var(--ink); padding: 7px 9px; font-size: 11px; }
 .sign-in button { border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--brass); padding: 7px 10px; font-size: 10px; cursor: pointer; }

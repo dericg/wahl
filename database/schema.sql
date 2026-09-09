@@ -46,7 +46,6 @@ create table if not exists public.link_previews (
   status text not null check (status in ('ready', 'unavailable')),
   fetched_at timestamptz not null default now()
 );
-
 create table if not exists public.wahl_conversations (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null unique references auth.users(id) on delete cascade,

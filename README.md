@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-The launch MVP is a single-page personal website backed by Supabase Postgres. Public visitors can read published posts; the registered owner can sign in with email and password, publish posts, keep private drafts, and delete entries. Row-level security enforces access in the database.
+The launch MVP is a single-page personal website backed by Supabase Postgres. Public visitors can read published posts; the registered owner can sign in with a passkey (with email and password for setup and recovery), publish posts, keep private drafts, and delete entries. Row-level security enforces access in the database.
 
 Without Supabase environment variables, the development server runs as an interactive local preview. Production builds without those variables are read-only.
 
@@ -45,8 +45,18 @@ Before merging, manually check desktop and narrow layouts, keyboard and touch ac
 
 1. Create a Supabase project and run `database/schema.sql` in its SQL editor.
 2. Copy `.env.example` to `.env.local` and add the project URL and publishable key.
-3. Start Wahl, use **Owner sign in** once, then register that account in `site_owners` using the final query documented in the schema.
+3. Create the owner’s email/password account in Supabase Auth. Start Wahl, use **Owner sign in → Use password** once, then register that account in `site_owners` using the final query documented in the schema.
 4. Add the production site URL to the allowed redirect URLs in Supabase Auth before deploying.
+
+## Owner passkeys
+
+Passkeys are the primary option behind **Owner sign in**. Sign in to the existing owner account with **Use password**, then choose **Add passkey** and finish the device prompt. Enrollment attaches the credential to that Supabase user; it does not create a new owner. Keep password access for first enrollment, lost-device recovery, and browsers without passkeys.
+
+This uses the installed Supabase SDK’s experimental `auth.signInWithPasskey` and `auth.registerPasskey` APIs. The client opts in, but that does not enable server support: before relying on passkeys, confirm the hosted Supabase Auth version supports these endpoints and configure its WebAuthn relying-party ID and allowed origins for the intended site. If the hosted project does not offer this support, password access remains usable; frontend deployment alone cannot activate passkeys. No custom credential verifier, session token, database table, or RLS change is introduced.
+
+Passkeys require a secure context (HTTPS, or supported localhost development) and a browser with WebAuthn. Choose the relying-party domain before enrollment. GitHub Pages and production may use unrelated domains, so do not assume a passkey enrolled on the review site will work in production. Auth redirect URLs alone do not configure WebAuthn origins.
+
+Before accepting this change, manually verify enrollment and a fresh passkey sign-in on the configured HTTPS site, cancellation and retry, password recovery access, an unsupported browser, and keyboard/narrow-screen controls. Confirm a signed-in non-owner still cannot read private thoughts or write posts. These browser/device and hosted Auth checks cannot run in fix automation; its finite tests cover the client auth outcomes and rendered access controls.
 
 ## `#fix` automation
 
@@ -108,6 +118,8 @@ Create a GitHub environment named `test` with this exact configuration:
 | Variable | `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Wahl publishable key |
 
 `SUPABASE_DB_URL` is not used by the current workflow. GitHub-hosted runners use Wahl's IPv4-compatible transaction pooler at `aws-0-us-west-2.pooler.supabase.com:6543`. The workflow removes accidental copied line endings, safely percent-encodes `SUPABASE_DB_PASSWORD`, constructs the connection URL only in the runner, and calls `supabase db push --db-url "$db_url"`. Port `6543` has been directly verified with `psql`; the session pooler on `5432` rejected the same valid password. Do not add `supabase link`: Wahl's access token can deploy functions but does not have the Supabase organization privilege required by that Management API operation.
+
+The conversational `wahl-chat` function also requires `OPENAI_API_KEY` as a Supabase project secret. Configure it once in **Supabase Dashboard → Edge Functions → Secrets**. The limited test-deployment access token can deploy functions but cannot manage project secrets, so the workflow must not call `supabase secrets set` or copy the GitHub Actions key into Supabase.
 
 To deploy an open pull request for review, open **Actions → Deploy Wahl test backend → Run workflow** and enter the pull-request number. The CLI equivalent is:
 
