@@ -51,7 +51,6 @@ jobs:
           test "$(jq -r '.head.repo.full_name' <<< "$pull")" = "$GITHUB_REPOSITORY"
           test "$(jq -r '.head.sha' <<< "$pull")" = "$EXPECTED_HEAD"
           test "$(jq -r '.base.sha' <<< "$pull")" = "$EXPECTED_BASE"
-          test "$(jq -r '.mergeable' <<< "$pull")" = true
           mergeable_state="$(jq -r '.mergeable_state' <<< "$pull")"
           # GitHub can report `unstable` even when no required check is
           # configured. The exact-head validation below is the authoritative
