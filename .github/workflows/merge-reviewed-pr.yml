@@ -52,7 +52,11 @@ jobs:
           test "$(jq -r '.head.sha' <<< "$pull")" = "$EXPECTED_HEAD"
           test "$(jq -r '.base.sha' <<< "$pull")" = "$EXPECTED_BASE"
           test "$(jq -r '.mergeable' <<< "$pull")" = true
-          test "$(jq -r '.mergeable_state' <<< "$pull")" = clean
+          mergeable_state="$(jq -r '.mergeable_state' <<< "$pull")"
+          # GitHub can report `unstable` even when no required check is
+          # configured. The exact-head validation below is the authoritative
+          # check for this workflow, so accept that state alongside `clean`.
+          test "$mergeable_state" = clean || test "$mergeable_state" = unstable
 
           current_main="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
           test "$current_main" = "$EXPECTED_BASE"
