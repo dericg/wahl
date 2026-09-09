@@ -21,9 +21,8 @@ test("chat credentials and GitHub access stay server-side and read-only", () => 
   assert.doesNotMatch(handler, /method:\s*"(PUT|PATCH|DELETE)"/);
 });
 
-test("trusted deployment installs and verifies the chat function", () => {
-  assert.match(deployment, /OPENAI_API_KEY: \$\{\{ secrets\.OPENAI_API_KEY \}\}/);
-  assert.match(deployment, /supabase secrets set OPENAI_API_KEY=/);
+test("trusted deployment deploys and verifies chat without managing owner secrets", () => {
+  assert.doesNotMatch(deployment, /supabase secrets set/);
   assert.match(deployment, /supabase functions deploy wahl-chat/);
   assert.match(deployment, /request OPTIONS/);
   assert.match(deployment, /test "\$chat_status" = "200"/);

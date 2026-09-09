@@ -93,6 +93,8 @@ Create a GitHub environment named `test` with this exact configuration:
 
 `SUPABASE_DB_URL` is not used by the current workflow. GitHub-hosted runners use Wahl's IPv4-compatible transaction pooler at `aws-0-us-west-2.pooler.supabase.com:6543`. The workflow removes accidental copied line endings, safely percent-encodes `SUPABASE_DB_PASSWORD`, constructs the connection URL only in the runner, and calls `supabase db push --db-url "$db_url"`. Port `6543` has been directly verified with `psql`; the session pooler on `5432` rejected the same valid password. Do not add `supabase link`: Wahl's access token can deploy functions but does not have the Supabase organization privilege required by that Management API operation.
 
+The conversational `wahl-chat` function also requires `OPENAI_API_KEY` as a Supabase project secret. Configure it once in **Supabase Dashboard → Edge Functions → Secrets**. The limited test-deployment access token can deploy functions but cannot manage project secrets, so the workflow must not call `supabase secrets set` or copy the GitHub Actions key into Supabase.
+
 To deploy an open pull request for review, open **Actions → Deploy Wahl test backend → Run workflow** and enter the pull-request number. The CLI equivalent is:
 
 ```bash

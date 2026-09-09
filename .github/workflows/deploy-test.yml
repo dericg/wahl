@@ -84,12 +84,9 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RAW_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           project_ref="$(printf '%s' "$RAW_SUPABASE_PROJECT_REF" | tr -d '\r\n')"
           printf '%s' "$project_ref" | grep -Eq '^[a-z]{20}$'
-          test -n "$OPENAI_API_KEY"
-          supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" --project-ref "$project_ref"
           supabase functions deploy dispatch-wahl-fix --project-ref "$project_ref" --no-verify-jwt
           supabase functions deploy update-wahl-fix --project-ref "$project_ref" --no-verify-jwt
           supabase functions deploy record-wahl-activity --project-ref "$project_ref" --no-verify-jwt
