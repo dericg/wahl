@@ -25,12 +25,15 @@ test("chat credentials and repository access remain server-side and read-only", 
   assert.doesNotMatch(app + bot, /OPENAI_API_KEY|WAHL_GITHUB_TOKEN/);
 });
 
-test("code work requires the owner's separate prepare action", () => {
+test("code work requires separate brief preparation and confirmation", () => {
   assert.match(bot, /Prepare this change/);
-  assert.match(bot, /latestUserMessage\.content\.slice\(0, 300\)/);
-  assert.match(app, /text: `#fix \$\{instruction\}`/);
-  assert.match(app, /audience: "private"/);
+  assert.doesNotMatch(bot, /latestUserMessage\.content\.slice/);
+  assert.match(bot, /action: "prepare"/);
+  assert.match(bot, /Confirm and start code work/);
+  assert.match(bot, /reviewFlow\.current\.confirm\(\)/);
+  assert.match(app, /requestConfirmedChange\(confirmedText, \{ addPost, sendFix \}\)/);
   assert.match(app, /dispatch-wahl-fix/);
+  assert.doesNotMatch(handler, /from\("posts"\)|dispatch-wahl-fix|\/dispatches/);
 });
 
 test("trusted test deployment installs the server secret and chat function", () => {

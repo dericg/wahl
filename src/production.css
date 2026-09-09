@@ -90,6 +90,11 @@ main { overflow: clip; }
 .bot-action strong { color: var(--ink); font-size: 11px; }
 .bot-action > button { flex: none; border: 1px solid #80652f; border-radius: 99px; padding: 7px 10px; color: #e4bf68; background: var(--brass-soft); font-size: 10px; font-weight: 600; cursor: pointer; }
 .bot-action > button:disabled { opacity: .5; cursor: default; }
+.bot-brief { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bot-brief p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.bot-brief-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font: 400 13px/1.5 "DM Sans",sans-serif; }
+.bot-brief > div { flex-wrap: wrap; }
+.bot-brief button { min-height: 40px; }
 @media(max-width:520px){.bot-action{align-items:flex-start;flex-direction:column}.bot-action>button{min-height:40px}.bot-message{max-width:96%}}
 .activity-card { background: transparent; box-shadow: none; border-color: rgba(81,57,35,.65); }
 .activity-kind { color: #806c52; font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }

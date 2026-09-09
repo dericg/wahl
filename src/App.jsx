@@ -11,6 +11,7 @@ import { appendPosts, feedSource, loadFeedPage, timestampKey } from "./feed";
 import { exactTime, timeAgo } from "./time";
 import FacebookArchive from "./FacebookArchive.jsx";
 import WahlBot from "./WahlBot.jsx";
+import { requestConfirmedChange } from "./briefReview.js";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -418,10 +419,8 @@ export default function App() {
     return true;
   }
 
-  async function askWahl(instruction) {
-    const post = await addPost({ text: `#fix ${instruction}`, audience: "private" });
-    if (!post) return false;
-    return sendFix(post.id);
+  async function askWahl(confirmedText) {
+    return requestConfirmedChange(confirmedText, { addPost, sendFix });
   }
 
   async function refreshFix(postId) {
