@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const workflow = readFileSync(new URL("../.github/workflows/wahl-fix.yml", import.meta.url), "utf8");
 const callbackFunction = readFileSync(new URL("../supabase/functions/update-wahl-fix/index.ts", import.meta.url), "utf8");
+const statusCallback = readFileSync(new URL("../supabase/functions/record-wahl-activity/index.ts", import.meta.url), "utf8");
 const testDeployment = readFileSync(new URL("../.github/workflows/deploy-test.yml", import.meta.url), "utf8");
 const reviewedMerge = readFileSync(new URL("../.github/workflows/merge-reviewed-pr.yml", import.meta.url), "utf8");
 const revisePullRequest = readFileSync(new URL("../.github/workflows/revise-wahl-pr.yml", import.meta.url), "utf8");
@@ -64,8 +65,13 @@ test("validated pull requests dispatch a serialized test-backend deployment", ()
   assert.match(testDeployment, /WAHL_BASE_PATH: \/wahl\//);
   assert.match(testDeployment, /gh pr comment "\$PR" --repo "\$GITHUB_REPOSITORY"/);
   assert.match(testDeployment, /test-deployment:\$\{GITHUB_RUN_ID\}/);
-  assert.match(testDeployment, /github-pages · success · #\$\{PR\} · \$\{title\}/);
+  assert.match(testDeployment, /Reader summary/);
+  assert.match(testDeployment, /gsub\("\[\[:cntrl:\]\]"; " "\)/);
+  assert.match(testDeployment, /detail="reader:\$reader_summary"/);
+  assert.match(testDeployment, /github-pages · success · #\$\{PR\} · \$\{detail\}/);
   assert.match(testDeployment, /functions\/v1\/record-wahl-activity/);
+  assert.match(statusCallback, /readerSummaryFromBody/);
+  assert.match(statusCallback, /api\.github\.com\/repos\/dericg\/wahl\/pulls/);
 });
 
 test("owner-reviewed merges run in a trusted bounded workflow", () => {

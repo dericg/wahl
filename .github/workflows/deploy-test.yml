@@ -150,16 +150,29 @@ jobs:
           set -euo pipefail
           if test -n "$PR"; then
             pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
-            title="$(jq -r '.title | gsub("[\\u0000-\\u001f\\u007f-\\u009f]"; " ") | .[0:220]' <<< "$pr")"
+            title="$(jq -r '.title | gsub("[[:cntrl:]]"; " ") | .[0:220]' <<< "$pr")"
+            reader_summary="$(jq -r '
+              (.body // "") | split("\n") |
+              reduce .[] as $line ({inside: false, parts: []};
+                if ($line | test("^##[[:space:]]+Reader summary"; "i")) then .inside = true
+                elif .inside and ($line | test("^##[[:space:]]+")) then .inside = false
+                elif .inside and (($line | gsub("^[[:space:]]+|[[:space:]]+$"; "")) | length) > 0
+                  then .parts += [($line | gsub("^[[:space:]]+|[[:space:]]+$"; ""))]
+                else . end) |
+              .parts | join(" ") | gsub("[[:cntrl:]]"; " ") | gsub("[[:space:]]+"; " ") | .[0:240]
+            ' <<< "$pr")"
             url="$(jq -r '.html_url' <<< "$pr")"
+            if [ -n "$reader_summary" ]; then detail="reader:$reader_summary"; else detail="$title"; fi
+            summary="github-pages · success · #${PR} · ${detail}"
           else
             commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/${GITHUB_SHA}")"
-            title="$(jq -r '.commit.message | split("\\n")[0] | gsub("[\\u0000-\\u001f\\u007f-\\u009f]"; " ") | .[0:220]' <<< "$commit")"
+            title="$(jq -r '.commit.message | split("\\n")[0] | gsub("[[:cntrl:]]"; " ") | .[0:220]' <<< "$commit")"
             url="$(jq -r '.html_url' <<< "$commit")"
+            summary="github-pages · success"
           fi
           body="$(jq -n \
             --arg sourceId "test-deployment:${GITHUB_RUN_ID}" \
-            --arg summary "github-pages · success · #${PR} · ${title}" \
+            --arg summary "$summary" \
             --arg url "$url" \
             --arg occurredAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{sourceId: $sourceId, kind: "Deployment", summary: $summary, url: $url, occurredAt: $occurredAt}')"

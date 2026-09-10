@@ -1,0 +1,49 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const handler = readFileSync(new URL("../supabase/functions/wahl-chat/index.ts", import.meta.url), "utf8");
+const schema = readFileSync(new URL("../database/schema.sql", import.meta.url), "utf8");
+const deployment = readFileSync(new URL("../.github/workflows/deploy-test.yml", import.meta.url), "utf8");
+const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const bot = readFileSync(new URL("../src/WahlBot.jsx", import.meta.url), "utf8");
+
+test("conversation is owner-only and browser clients cannot write messages", () => {
+  assert.match(schema, /Owner can read Wahl conversations/);
+  assert.match(schema, /Owner can read Wahl messages/);
+  assert.match(schema, /revoke all on public\.wahl_messages from anon, authenticated/);
+  assert.doesNotMatch(schema, /grant insert on public\.wahl_messages to authenticated/);
+  assert.match(handler, /owner !== true/);
+  assert.match(handler, /SUPABASE_SERVICE_ROLE_KEY/);
+});
+
+test("chat credentials and repository access remain server-side and read-only", () => {
+  assert.match(handler, /Deno\.env\.get\("OPENAI_API_KEY"\)/);
+  assert.match(handler, /api\.openai\.com\/v1\/responses/);
+  assert.match(handler, /api\.github\.com\/repos\/dericg\/wahl\/contents/);
+  assert.doesNotMatch(handler, /method:\s*"(PUT|PATCH|DELETE)"/);
+  assert.doesNotMatch(app + bot, /OPENAI_API_KEY|WAHL_GITHUB_TOKEN/);
+});
+
+test("code work requires separate brief preparation and confirmation", () => {
+  assert.match(bot, /Prepare this change/);
+  assert.doesNotMatch(bot, /latestUserMessage\.content\.slice/);
+  assert.match(bot, /action: "prepare"/);
+  assert.match(bot, /Confirm and start code work/);
+  assert.match(bot, /reviewFlow\.current\.confirm\(\)/);
+  assert.match(app, /requestConfirmedChange\(confirmedText, \{ addPost, sendFix \}\)/);
+  assert.match(app, /dispatch-wahl-fix/);
+  assert.doesNotMatch(handler, /from\("posts"\)|dispatch-wahl-fix|\/dispatches/);
+});
+
+test("trusted test deployment preserves owner-managed secrets and deploys the chat function", () => {
+  assert.doesNotMatch(deployment, /supabase secrets set/);
+  assert.match(deployment, /supabase functions deploy wahl-chat/);
+  assert.match(deployment, /request OPTIONS/);
+  assert.match(deployment, /test "\$chat_status" = "200"/);
+});
+
+test("client handles non-Response function error contexts", () => {
+  assert.match(bot, /typeof context\.json === "function"/);
+  assert.match(bot, /typeof context\.error === "string"/);
+});

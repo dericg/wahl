@@ -6,6 +6,19 @@ export function publicWorkflow(summary) {
   return /^(Validate Wahl|Turn a Wahl thought into a pull request) · (success|failure|cancelled|timed_out|action_required|startup_failure)$/.test(summary);
 }
 
+export function readerSummaryFromBody(body) {
+  if (typeof body !== "string") return "";
+  const lines = body.split(/\r?\n/);
+  const parts = [];
+  let inside = false;
+  for (const line of lines) {
+    if (/^##\s+Reader summary\s*$/i.test(line.trim())) { inside = true; continue; }
+    if (inside && /^##\s+/.test(line.trim())) break;
+    if (inside && line.trim()) parts.push(line.trim());
+  }
+  return Array.from(parts.join(" ").replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").replace(/\s+/g, " ").trim()).slice(0, 240).join("");
+}
+
 // Stable identities also cover historical snapshots and older workflow senders.
 export function normalizeActivity(payload) {
   if (payload.kind === "Workflow") {

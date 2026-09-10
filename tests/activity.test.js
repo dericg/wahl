@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readerSummaryFromBody } from "../supabase/functions/_shared/wahl-activity-policy.js";
 import { activityHighlights, activityOutcomes, activityPayloads, activityWorkSummary, filterWallEntries, groupConsecutiveActivity, mergeActivity, releaseActivity, snapshotActivity, summarizeActivity, wallEntries } from "../src/activity.js";
 import { normalizeActivity, validateActivity } from "../supabase/functions/_shared/wahl-activity-policy.js";
 
@@ -28,6 +29,14 @@ test("generic publishing lifecycle records remain stored but stay off the public
     url: "https://github.com/dericg/wahl/pull/44",
   };
   assert.deepEqual(mergeActivity([generic, detailed]), [detailed]);
+});
+
+test("repeated successful test publications show only the newest card for a pull request", () => {
+  const summary = "github-pages · success · #48 · reader:The update adds a private archive.";
+  const older = { source_id: "test-deployment:1", kind: "Deployment", summary, url: "https://github.com/dericg/wahl/pull/48", occurred_at: "2026-09-07T19:00:00Z" };
+  const newest = { ...older, source_id: "test-deployment:2", occurred_at: "2026-09-07T20:00:00Z" };
+  assert.deepEqual(mergeActivity([older, newest]), [newest]);
+  assert.deepEqual(mergeActivity([newest, older]), [newest]);
 });
 
 test("thoughts and GitHub events form one chronological wall feed", () => {
@@ -175,12 +184,34 @@ test("request and proposed-change titles name the work without claiming the titl
   }
 });
 
+test("old automation titles are cleaned up for readers", () => {
+  assert.equal(
+    activityWorkSummary({ kind: "Pull request", summary: "merged #5 · [Wahl fix] **_Hey look! Formatted text._** it should be wysiwyg" }),
+    "Deric accepted this change: “Hey look! Formatted text. it should be wysiwyg”. It is now part of Wahl and will appear when that version is published.",
+  );
+});
+
 test("a published test version explains which proposed change it contains", () => {
   const activity = {
     kind: "Deployment",
     summary: "github-pages · success · #44 · Make site updates easier to understand",
   };
   assert.equal(activityWorkSummary(activity), "Deric published a new test version of Wahl. It includes proposed change #44: “Make site updates easier to understand”. It is ready to try.");
+});
+
+test("a reader summary explains the change as prose and repeated test deployments collapse", () => {
+  const summary = "github-pages · success · #48 · reader:The update adds a private way to browse old Facebook posts. It also includes an On this day section.";
+  const newest = { ...deployment(20, "success", 21), summary };
+  const older = { ...deployment(19, "success", 20), summary };
+  assert.equal(activityWorkSummary(newest), "Deric published a new test version of Wahl. The update adds a private way to browse old Facebook posts. It also includes an On this day section.");
+  assert.deepEqual(activityHighlights([newest, older]), [newest]);
+  assert.deepEqual(activityOutcomes([newest, older]), [newest, older]);
+});
+
+test("reader summaries come only from their named pull request section", () => {
+  const body = "## Summary\nTechnical notes.\n\n## Reader summary\nThe update makes the archive easier to understand.\nIt also removes repeated notices.\n\n## Validation\nTests pass.";
+  assert.equal(readerSummaryFromBody(body), "The update makes the archive easier to understand. It also removes repeated notices.");
+  assert.equal(readerSummaryFromBody("## Summary\nNo reader section"), "");
 });
 
 test("automatic tasks explain proven work and do not infer a fix or unrelated title", () => {
