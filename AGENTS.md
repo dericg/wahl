@@ -59,6 +59,11 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Keep explicit `select, update` grants on `automation_requests` for `service_role`; `update-wahl-fix` requires both because PostgREST returns the updated row. RLS bypass does not replace table privileges. A missing grant appears in Postgres logs as SQLSTATE `42501` and prevents automation from advancing beyond `queued`.
 - When changing data behavior, update both the application code and `database/schema.sql` as needed.
 - Treat the Supabase publishable key as client-safe configuration, but never commit passwords, service-role keys, access tokens, or `.env.local`.
+- Passkeys use Supabase Auth's experimental WebAuthn support. Keep `auth.experimental.passkey: true` in the browser client and require `@supabase/supabase-js` 2.105.0 or newer.
+- Frontend deployment does not enable passkeys. The hosted Supabase project must have Authentication → Passkeys enabled, with a stable WebAuthn relying-party ID and allowed origins configured separately. The RP ID is a bare domain (no scheme, path, or port); each origin must use HTTPS and match that domain.
+- Choose the production RP ID before enrolling credentials. Changing it invalidates passkeys registered under the previous ID. For the GitHub Pages review site, use `dericg.github.io` and `https://dericg.github.io`; configure the production origin separately before production enrollment.
+- Passkey enrollment requires an existing, confirmed, non-anonymous owner session. Keep password sign-in available for first enrollment, recovery, unsupported browsers, and lost devices. Do not add a custom credential verifier or passkey table when Supabase Auth provides the ceremony and session.
+- Treat passkey configuration as an external deployment prerequisite: database migrations and Edge Function deployment do not apply Auth WebAuthn settings. Never claim passkey support is functional until the live Auth challenge endpoint is enabled and a real enrollment/sign-in ceremony has been tested.
 
 ## Environments
 
@@ -161,6 +166,7 @@ Run `npm test` for automation-policy changes and `npm run build` after source ch
 - Because test deployments share one live database, an unmerged PR migration becomes part of the database's forward-only history immediately. Before deploying another PR, carry every already-applied migration file exactly into its checkout and ultimately `main`; never use placeholders or history repair to hide a real applied migration. Migration `20260906120000` was first deployed from PR #23 and is therefore retained as shared baseline history independently of that PR's application changes.
 - A successful test deployment must complete `validate`, `deploy`, and `deploy-pages`. If migrations fail, Edge Functions and Pages are intentionally skipped; the changes are not available for browser review yet.
 - The Pages job does not check out the repository. Any GitHub CLI call there must specify `--repo "$GITHUB_REPOSITORY"`; otherwise publication can succeed while the final pull-request comment fails with `not a git repository`.
+- The trusted test deployment must not copy or rotate the owner's `OPENAI_API_KEY` or other Auth secrets. Supabase Auth passkey settings are owner-managed in the Dashboard or Management API, outside normal frontend, migration, and Edge Function deployment.
 
 Before handing off a code change:
 
@@ -168,7 +174,8 @@ Before handing off a code change:
 2. Run `npm run build`.
 3. Check the affected experience locally when interaction or layout changed.
 4. Confirm that no secrets or `.env.local` were added to Git.
-5. If the isolated automatic test-deployment path is enabled, deploy the validated branch's built `dist` output through the trusted workflow, verify the test URL, and record the pull request, branch, commit, deployment identifier, and URL. Otherwise, test publishing remains an explicitly requested manual action.
-6. If production publishing was explicitly requested after acceptance, build the exact accepted source, deploy it through the designated production project, verify the production URL and rendered version, and create the corresponding immutable release tag.
+5. For passkey changes, verify in a real HTTPS browser: owner enrollment after password sign-in, fresh passkey sign-in, cancellation and retry, password recovery, unsupported-browser fallback, and a signed-in non-owner's continued denial of private data. Unit tests cannot prove hosted Auth configuration or device WebAuthn behavior.
+6. If the isolated automatic test-deployment path is enabled, deploy the validated branch's built `dist` output through the trusted workflow, verify the test URL, and record the pull request, branch, commit, deployment identifier, and URL. Otherwise, test publishing remains an explicitly requested manual action.
+7. If production publishing was explicitly requested after acceptance, build the exact accepted source, deploy it through the designated production project, verify the production URL and rendered version, and create the corresponding immutable release tag.
 
 Do not deploy merely because source files changed. Automatic test publishing is allowed only through the configured isolated and trusted path; manual test publishing and every production publish require explicit owner authorization. Publishing to the test site never authorizes merging or production release.
