@@ -1,0 +1,12 @@
+{
+  "name": "Wahl",
+  "short_name": "Wahl",
+  "description": "A quieter place for thoughts, small observations, and things worth keeping.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#130c08",
+  "theme_color": "#130c08",
+  "icons": [
+    { "src": "icons/wahl.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
