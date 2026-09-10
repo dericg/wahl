@@ -408,7 +408,7 @@ export default function App() {
   return (
     <main className={owner && feedFilter === "archive" ? "archive-active" : ""}><div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="shell">
       <header className="site-header">
-        <div className="header-controls"><ReleaseHistory /><div className="owner-access"><SignIn key={session?.user.id || "signed-out"} session={session} owner={owner} client={supabase} previewMode={previewMode} /></div></div>
+        <div className="header-controls"><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} client={supabase} previewMode={previewMode} /></div></div>
         <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
       </header>
       <PersonalNote />
