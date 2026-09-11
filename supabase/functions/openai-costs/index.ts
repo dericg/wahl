@@ -38,7 +38,6 @@ Deno.serve(async (request) => {
   const range = currentUtcMonth();
   const url = new URL("https://api.openai.com/v1/organization/costs");
   url.searchParams.set("start_time", String(range.startTime));
-  url.searchParams.set("end_time", String(range.endTime));
   url.searchParams.set("bucket_width", "1d");
   url.searchParams.set("limit", "31");
   url.searchParams.append("project_ids[]", projectId);

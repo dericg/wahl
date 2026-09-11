@@ -2,7 +2,6 @@ export function currentUtcMonth(now = new Date()) {
   const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
   return {
     startTime: Math.floor(start / 1000),
-    endTime: Math.floor(now.getTime() / 1000) + 1,
     period: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`,
   };
 }

@@ -16,7 +16,6 @@ test("cost summaries total OpenAI buckets and format currency", () => {
 test("the reporting window is the current UTC month", () => {
   assert.deepEqual(currentUtcMonth(new Date("2026-09-10T12:30:00Z")), {
     startTime: 1788220800,
-    endTime: 1789043401,
     period: "2026-09",
   });
 });
@@ -30,6 +29,7 @@ test("cost reporting stays server-side and owner-only", () => {
   assert.match(handler, /Deno\.env\.get\("OPENAI_ADMIN_KEY"\)/);
   assert.match(handler, /Deno\.env\.get\("OPENAI_PROJECT_ID"\)/);
   assert.match(handler, /project_ids\[\]/);
+  assert.doesNotMatch(handler, /searchParams\.set\("end_time"/);
   assert.match(handler, /Cache-Control": "no-store"/);
   assert.doesNotMatch(app, /OPENAI_ADMIN_KEY|OPENAI_PROJECT_ID/);
   assert.match(deployment, /supabase functions deploy openai-costs/);
