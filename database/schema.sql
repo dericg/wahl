@@ -46,6 +46,11 @@ create table if not exists public.link_previews (
   status text not null check (status in ('ready', 'unavailable')),
   fetched_at timestamptz not null default now()
 );
+
+create table if not exists public.server_heartbeats (
+  server_name text primary key check (server_name = 'ubuntu'),
+  last_seen_at timestamptz not null default now()
+);
 create table if not exists public.wahl_conversations (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null unique references auth.users(id) on delete cascade,
@@ -69,6 +74,7 @@ alter table public.posts enable row level security;
 alter table public.automation_requests enable row level security;
 alter table public.repository_activity enable row level security;
 alter table public.link_previews enable row level security;
+alter table public.server_heartbeats enable row level security;
 alter table public.wahl_conversations enable row level security;
 alter table public.wahl_messages enable row level security;
 
@@ -94,6 +100,9 @@ grant select, insert, update on public.repository_activity to service_role;
 revoke all on public.link_previews from anon, authenticated;
 grant select on public.link_previews to authenticated;
 grant select, insert, update on public.link_previews to service_role;
+revoke all on public.server_heartbeats from anon, authenticated;
+grant select on public.server_heartbeats to authenticated;
+grant select, insert, update on public.server_heartbeats to service_role;
 revoke all on public.wahl_conversations from anon, authenticated;
 revoke all on public.wahl_messages from anon, authenticated;
 grant select on public.wahl_conversations to authenticated;
@@ -123,6 +132,10 @@ using (public.is_wahl_owner());
 drop policy if exists "Repository activity is publicly readable" on public.repository_activity;
 create policy "Repository activity is publicly readable" on public.repository_activity for select to anon, authenticated
 using (true);
+
+drop policy if exists "Owner can read server heartbeats" on public.server_heartbeats;
+create policy "Owner can read server heartbeats" on public.server_heartbeats for select to authenticated
+using (public.is_wahl_owner());
 
 drop policy if exists "Public posts are readable" on public.posts;
 create policy "Public posts are readable" on public.posts for select to anon, authenticated

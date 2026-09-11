@@ -29,6 +29,52 @@ The archive view supports text search and year/type filters, loads long historie
 
 Visible archived links automatically request an owner-only preview through Wahl's authenticated server function. It verifies the signed-in Wahl owner, rejects local/private network targets and unsafe redirects, reads a bounded amount of public HTML, and caches titles, descriptions, site names, and image URLs in `link_previews` for 30 days. Public visitors cannot request previews or read the cache. Preview images are requested without a referrer; links that are private, expired, blocked, or no longer publish metadata retain the archive's basic link card.
 
+## OpenAI API costs
+
+OpenAI exposes organization costs, not the remaining prepaid-credit balance, through `GET /v1/organization/costs`. The endpoint requires an organization Admin API key with the `api.usage.read` scope. A normal project key (`sk-proj-...`) cannot call it.
+
+Store the Admin key only in the Git-ignored `.env.local` file:
+
+```dotenv
+OPENAI_ADMIN_KEY=sk-admin-...
+```
+
+From the repository root, this command returns the organization's accumulated cost for the current calendar month, rounded to cents:
+
+```bash
+set -a
+source .env.local
+set +a
+
+start_time="$(node -e 'const now = new Date(); console.log(Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000))')"
+
+curl --silent --show-error --fail-with-body --get \
+  "https://api.openai.com/v1/organization/costs" \
+  --data-urlencode "start_time=$start_time" \
+  --data-urlencode "bucket_width=1d" \
+  --data-urlencode "limit=31" \
+  --header "Authorization: Bearer $OPENAI_ADMIN_KEY" |
+  jq -r '"$" + (([.data[].results[]?.amount.value] | add // 0) * 100 | round / 100 | tostring)'
+```
+
+This is an administrative reporting credential. Never give it a `VITE_` prefix, expose it to browser code, add it to Supabase frontend configuration, or commit it. The command requires `curl`, Node.js, and `jq`.
+
+Signed-in owners also see Wahl's current-month OpenAI cost on the wall. The browser calls the owner-authenticated `openai-costs` Edge Function, which filters the organization Costs API to the configured Wahl OpenAI project and returns only the amount, currency, and UTC month. Configure `OPENAI_ADMIN_KEY` and `OPENAI_PROJECT_ID` once as Supabase Edge Function secrets before the first test deployment. Do not add either value to GitHub Pages, a `VITE_` variable, or the trusted deployment workflow; that workflow deploys the function but does not receive or manage these secrets.
+
+## Ubuntu status
+
+Signed-in owners see a quiet `ubuntu online/offline` line above the wall. Wahl does not try to reach `ubuntu.local` from the browser; the server sends an outbound heartbeat to Supabase instead. A heartbeat is fresh for five minutes, and Wahl checks its owner-only status once per minute.
+
+After applying `supabase/migrations/20260910120000_server_heartbeat.sql`, deploy the `server-heartbeat` Edge Function and set a long random `WAHL_SERVER_HEARTBEAT_TOKEN` as a Supabase Edge Function secret. Store the same value only on Ubuntu. Send a heartbeat every two minutes with a systemd timer or cron job whose command is equivalent to:
+
+```bash
+curl --fail --silent --show-error --request POST \
+  --header "Authorization: Bearer $WAHL_SERVER_HEARTBEAT_TOKEN" \
+  "https://rzmgyvkvfjbcsxegafko.supabase.co/functions/v1/server-heartbeat"
+```
+
+The endpoint ignores client timestamps and writes the receipt time itself. It returns `401` without the secret. Do not put the heartbeat token in a `VITE_` variable, `.env.local`, browser code, or GitHub Pages configuration.
+
 ## Repository activity
 
 Recent commits, issues, pull requests, deployments, and workflow results appear as read-only cards in the same reverse-chronological feed as Wahl thoughts. All keeps lifecycle events in chronological order. GitHub issues shows one entry per issue in its newest loaded state, with a count of distinct issues loaded. The wall initially displays up to 20 combined entries; Load older extends the same feed. Counts describe loaded entries, not repository totals. Every card shows relative age and the exact local time, and relative ages refresh while the wall is open. Each event links to its source on GitHub. The local preview uses recent build commits when live activity is unavailable.

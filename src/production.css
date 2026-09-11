@@ -133,6 +133,20 @@ main { overflow: clip; }
 .load-older[aria-disabled="true"] { opacity: .6; cursor: default; }
 .load-older:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .feed-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.owner-statuses { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: -9px 2px 14px; }
+.server-status, .openai-cost-status { display: flex; align-items: center; gap: 7px; margin: 0; color: #806c52; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.server-status strong { color: var(--muted); font: inherit; }
+.server-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #675640; box-shadow: 0 0 0 2px rgba(103,86,64,.13); }
+.server-status-dot.online { background: #72936c; box-shadow: 0 0 0 2px rgba(114,147,108,.16); }
+.server-status-dot.offline { background: var(--wine); box-shadow: 0 0 0 2px rgba(165,80,71,.16); }
+.server-last-seen { margin-left: auto; color: #675640; letter-spacing: normal; text-transform: none; }
+.openai-cost-status { margin-left: auto; }
+.openai-cost-status strong { color: var(--muted); font: inherit; }
+.openai-cost-status button { padding: 0; border: 0; background: transparent; color: #675640; font: inherit; letter-spacing: normal; text-transform: lowercase; cursor: pointer; }
+.openai-cost-status button:hover { color: var(--muted); }
+.openai-cost-status button:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.openai-cost-status button:disabled { opacity: .55; cursor: default; }
+@media(max-width:520px){.openai-cost-status{width:100%;margin-left:0}}
 @media(max-width:520px){.header-controls{grid-template-columns:minmax(0,1fr)}.owner-access,.account-controls{justify-content:flex-start}.release-list li{grid-template-columns:1fr auto}.release-list time{display:none}}
 .archive-empty { display: grid; justify-items: center; gap: 10px; padding: 34px 22px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); text-align: center; }
 .archive-empty > svg { color: var(--brass); }

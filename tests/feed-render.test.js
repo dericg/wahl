@@ -53,6 +53,8 @@ test("owner preview and public cards expose exact and relative semantic time", a
       assert.equal(html.includes('aria-label="Create a post"'), owner);
       assert.equal(html.includes('aria-label="Delete this post"'), owner);
       assert.equal(html.includes("Only me"), owner);
+      assert.equal(html.includes('aria-label="Ubuntu server status"'), owner);
+      assert.equal(html.includes('aria-label="OpenAI cost status"'), owner);
       assert.match(html, /role="group" aria-label="Filter the wall"/);
       if (grouped) {
         assert.match(html, /aria-label="2 updates about work on this site"/);
