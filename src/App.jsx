@@ -13,6 +13,8 @@ import { exactTime, timeAgo } from "./time";
 import FacebookArchive from "./FacebookArchive.jsx";
 import WahlBot from "./WahlBot.jsx";
 import { requestConfirmedChange } from "./briefReview.js";
+import { serverStatus } from "./serverStatus";
+import { formatOpenAICost } from "./openaiCosts";
 
 const previewMode = import.meta.env.DEV && !isCloudConfigured;
 
@@ -31,6 +33,29 @@ function PersonalNote() {
         <span><small>A note from Deric</small><strong>Grow through mastery.</strong></span><ChevronDown size={17} />
       </button>
       {open && <div><p>For me, mastery isn’t perfection. It is the practice of showing up with intention, staying present through discomfort, and making thoughtful adjustments without abandoning the work—or myself.</p><p className="personal-refrain">Show up. Stay present. Make adjustments.</p></div>}
+    </section>
+  );
+}
+
+export function ServerStatus({ lastSeenAt, loading, now }) {
+  const status = loading ? { state: "checking", label: "checking…" } : serverStatus(lastSeenAt, now);
+  return (
+    <section className="server-status" aria-label="Ubuntu server status">
+      <span className={`server-status-dot ${status.state}`} aria-hidden="true" />
+      <span>ubuntu</span>
+      <strong role="status">{status.label}</strong>
+      {lastSeenAt && <span className="server-last-seen">last seen {timeAgo(lastSeenAt, now)}</span>}
+    </section>
+  );
+}
+
+export function OpenAICostStatus({ amount, currency, loading, error, onRefresh }) {
+  const value = loading ? "checking…" : error ? "unavailable" : `${formatOpenAICost(amount, currency)} this month`;
+  return (
+    <section className="openai-cost-status" aria-label="OpenAI cost status">
+      <span>openai</span>
+      <strong role="status">{value}</strong>
+      <button type="button" onClick={onRefresh} disabled={loading}>refresh</button>
     </section>
   );
 }
@@ -196,6 +221,12 @@ export default function App() {
   const [hasMore, setHasMore] = useState(false);
   const [olderLoading, setOlderLoading] = useState(false);
   const [archiveEntries, setArchiveEntries] = useState([]);
+  const [serverLastSeen, setServerLastSeen] = useState(null);
+  const [serverStatusLoading, setServerStatusLoading] = useState(false);
+  const [openaiCost, setOpenaiCost] = useState(null);
+  const [openaiCostLoading, setOpenaiCostLoading] = useState(false);
+  const [openaiCostError, setOpenaiCostError] = useState(false);
+  const costsRequest = useRef(null);
   const pager = useRef(null);
   const loadedPosts = useRef(posts);
   const entries = useMemo(() => wallEntries(posts, activity), [posts, activity]);
@@ -319,6 +350,65 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [session, owner, fixes]);
 
+  useEffect(() => {
+    if (!supabase || !session || !owner) {
+      setServerLastSeen(null);
+      setServerStatusLoading(false);
+      return undefined;
+    }
+    let active = true;
+    async function loadServerStatus() {
+      setServerStatusLoading(true);
+      const { data, error } = await supabase.from("server_heartbeats")
+        .select("last_seen_at").eq("server_name", "ubuntu").maybeSingle();
+      if (active) {
+        setServerLastSeen(error ? null : data?.last_seen_at || null);
+        setServerStatusLoading(false);
+      }
+    }
+    loadServerStatus();
+    const interval = window.setInterval(loadServerStatus, 60_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [session, owner]);
+
+  async function loadOpenAICost() {
+    if (!supabase || !session || !owner) return;
+    const request = {};
+    costsRequest.current = request;
+    setOpenaiCostLoading(true);
+    setOpenaiCostError(false);
+    const { data: authData } = await supabase.auth.getSession();
+    const accessToken = authData.session?.access_token;
+    if (!accessToken) {
+      if (costsRequest.current === request) { setOpenaiCost(null); setOpenaiCostError(true); setOpenaiCostLoading(false); }
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke("openai-costs", {
+      body: {},
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (costsRequest.current !== request) return;
+    if (error || typeof data?.amount !== "number") {
+      setOpenaiCost(null);
+      setOpenaiCostError(true);
+    } else {
+      setOpenaiCost(data);
+    }
+    setOpenaiCostLoading(false);
+  }
+
+  useEffect(() => {
+    if (!supabase || !session || !owner) {
+      costsRequest.current = null;
+      setOpenaiCost(null);
+      setOpenaiCostLoading(false);
+      setOpenaiCostError(false);
+      return;
+    }
+    loadOpenAICost();
+    return () => { costsRequest.current = null; };
+  }, [session, owner]);
+
   async function addPost({ text, audience }) {
     if (previewMode) {
       const post = { id: crypto.randomUUID(), text, audience_type: audience, created_at: new Date().toISOString() };
@@ -411,6 +501,10 @@ export default function App() {
         <div className="header-controls"><ReleaseHistory /><div className="owner-access"><SignIn session={session} owner={owner} client={supabase} previewMode={previewMode} /></div></div>
         <div className="brand"><div className="brand-line"><div className="wordmark">Wahl<span>.</span></div><span>by Deric Garza</span></div><p>thoughts, small observations, and things worth keeping</p></div>
       </header>
+      {owner && <div className="owner-statuses">
+        <ServerStatus lastSeenAt={serverLastSeen} loading={serverStatusLoading} now={now} />
+        <OpenAICostStatus amount={openaiCost?.amount} currency={openaiCost?.currency} loading={openaiCostLoading} error={openaiCostError} onRefresh={loadOpenAICost} />
+      </div>}
       <PersonalNote />
       {owner && <WahlBot onRequest={askWahl} busy={busy} previewMode={previewMode} />}
       {owner && <Composer onPost={addPost} busy={busy} />}
